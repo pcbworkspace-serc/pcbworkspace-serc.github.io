@@ -1,13 +1,18 @@
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Grid } from "@react-three/drei";
 import * as THREE from "three";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 interface DroppedItem {
   type: string;
   x: number;
   y: number;
 }
+
+type PCBWorkspaceProps = {
+  items?: DroppedItem[];
+  onItemsChange?: (items: DroppedItem[]) => void;
+};
 
 /* ── Realistic Components ── */
 
@@ -329,8 +334,14 @@ function PCBComponent({ position, label }: { position: [number, number, number];
 
 /* ── Main Workspace ── */
 
-export default function PCBWorkspace() {
-  const [droppedItems, setDroppedItems] = useState<DroppedItem[]>([]);
+export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps) {
+  const [droppedItems, setDroppedItems] = useState<DroppedItem[]>(items ?? []);
+
+  useEffect(() => {
+    if (items) {
+      setDroppedItems(items);
+    }
+  }, [items]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -339,8 +350,12 @@ export default function PCBWorkspace() {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 6 - 3;
     const y = ((e.clientY - rect.top) / rect.height) * -4 + 2;
-    setDroppedItems((prev) => [...prev, { type, x, y }]);
-  }, []);
+    setDroppedItems((prev) => {
+      const updated = [...prev, { type, x, y }];
+      onItemsChange?.(updated);
+      return updated;
+    });
+  }, [onItemsChange]);
 
   return (
     <div

@@ -447,6 +447,10 @@ const Index = () => {
         </div>
       </div>
 
+      <div className="absolute bottom-3 left-3 z-50">
+        <span className="text-xs font-semibold text-primary/90">Educational Version</span>
+      </div>
+
       {/* Logo */}
       <div className="absolute top-3 right-3 flex items-center gap-2">
         <span className="text-xs text-primary/90 max-w-[180px] truncate">{email ?? ""}</span>

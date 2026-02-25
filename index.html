@@ -1,79 +1,29 @@
-<!--
-ramallis_homepage.html
-Simple editable homepage for arXiv / academic use.
-Replace placeholder text (e.g., YOUR_EMAIL, ORCID_ID, ARXIV_ID) with your real info.
--->
-
-
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Ramallis — Space Physics</title>
-<meta name="description" content="Ramallis — research in space physics. Publications, contact, and links." />
-<style>
-:root{--accent:#0b7285;--muted:#6b7280;--bg:#0f172a;color-scheme:light}
-*{box-sizing:border-box}
-body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;background:#f7fafc;color:#0f172a;line-height:1.5}
-.container{max-width:900px;margin:36px auto;padding:20px}
-header{display:flex;align-items:center;gap:18px}
-.avatar{width:84px;height:84px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#4f46e5);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:28px}
-h1{margin:0;font-size:28px}
-h2{margin:0;color:var(--muted);font-weight:500}
-.links{margin-top:14px;display:flex;gap:10px;flex-wrap:wrap}
-a.button{display:inline-block;padding:8px 12px;border-radius:8px;background:#eef2ff;color:#3730a3;text-decoration:none;font-weight:600;border:1px solid rgba(55,48,163,0.06)}
-main{margin-top:26px;background:white;border-radius:12px;padding:20px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
-section+section{margin-top:18px}
-.grid{display:grid;grid-template-columns:1fr 320px;gap:18px}
-@media (max-width:880px){.grid{grid-template-columns:1fr}}
-.meta{color:var(--muted);font-size:14px}
-ul.publications{padding-left:18px;margin:8px 0}
-footer{margin-top:22px;color:var(--muted);font-size:13px}
-.pill{display:inline-block;padding:6px 8px;border-radius:999px;border:1px dashed #e6edf3;font-size:13px;color:#334155}
-.muted{color:var(--muted)}
-.field-note{font-size:13px;color:#475569}
-</style>
-</head>
-<body>
-<div class="container">
-<header>
-<div class="avatar">R</div>
-<div>
-<h1>Ramallis</h1>
-<h2>Space Physics · Plasma & Magnetospheric Processes</h2>
-<div class="links">
-<!-- Replace placeholders below with your real profile links -->
-<a class="button" href="https://orcid.org/ENTER-ORCID-ID" target="_blank" rel="noopener">ORCID</a>
-<a class="button" href="https://scholar.google.com/citations?user=ENTER_ID" target="_blank" rel="noopener">Google Scholar</a>
-<a class="button" href="https://github.com/ramallis" target="_blank" rel="noopener">GitHub</a>
-<a class="button" href="https://arxiv.org/a/ramallis" target="_blank" rel="noopener">arXiv profile</a>
-</div>
-</div>
-</header>
+  <head>
+    <meta charset="UTF‑8" />
+    <meta name="viewport" content="width=device-width, initial‑scale=1.0" />
 
+    <title>PCB Workspace SERC</title>
+    <meta name="description" content="PCB Workspace SERC" />
+    <meta name="author" content="PCB Workspace SERC" />
 
-<main>
-<div class="grid">
-<div>
-<section>
-<h3>About</h3>
-<p class="field-note">I am a researcher in space physics interested in plasma dynamics, magnetosphere-ionosphere coupling, and observational analysis. This page is a quick professional homepage to link from preprints and profiles.</p>
-</section>
+    <!-- your custom favicon -->
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/favicon-192.png" type="image/png" sizes="192x192">
 
+    <meta property="og:title" content="PCB Workspace SERC" />
+    <meta property="og:description" content="PCB Workspace SERC" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
 
-<section>
-<h3>Research interests</h3>
-<ul>
-<li>Magnetospheric physics & plasma waves</li>
-<li>Space weather and particle dynamics</li>
-<li>Satellite data analysis & modeling</li>
-</ul>
-</section>
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@PCB Workspace SERC" />
+    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+  </head>
 
-
-<section>
-<h3>Selected publications</h3>
-<p class="muted">(Replace these example entries with your actual citations and DOI/arXiv links.)</p>
-<ul class="publications">
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

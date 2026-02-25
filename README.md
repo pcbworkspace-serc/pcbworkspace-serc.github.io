@@ -62,7 +62,25 @@ This project is built with:
 
 ## How can I deploy this project?
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+This repository is configured for GitHub Pages from the `main` branch using the `/docs` folder.
+
+1. Build the site:
+
+```sh
+npm run pages
+```
+
+2. Commit and push the updated `docs/` output:
+
+```sh
+git add .
+git commit -m "Deploy latest site"
+git push origin main
+```
+
+3. In GitHub repo settings, confirm **Pages Source** is set to:
+	- Branch: `main`
+	- Folder: `/docs`
 
 ## Can I connect a custom domain to my Lovable project?
 

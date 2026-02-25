@@ -1,4 +1,6 @@
 const DEFAULT_SUPPORT_EMAIL = "spaceroboticscreations@outlook.com";
+const DEFAULT_PCB_WORKSPACE_ACCESS_VIDEO_URL =
+  "https://image2url.com/r2/default/videos/1772004985663-f0a926d8-f6d7-4317-9923-883f49c38eda.mp4";
 
 function getWebhookUrl() {
   return import.meta.env.VITE_WELCOME_EMAIL_WEBHOOK_URL?.trim() ?? "";
@@ -9,7 +11,7 @@ function getSupportEmail() {
 }
 
 function getVideoUrl() {
-  return import.meta.env.VITE_PCB_WORKSPACE_ACCESS_VIDEO_URL?.trim() ?? "";
+  return import.meta.env.VITE_PCB_WORKSPACE_ACCESS_VIDEO_URL?.trim() || DEFAULT_PCB_WORKSPACE_ACCESS_VIDEO_URL;
 }
 
 export function buildWelcomeEmailPayload(recipientEmail: string) {

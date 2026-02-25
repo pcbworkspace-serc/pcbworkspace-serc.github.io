@@ -87,6 +87,22 @@ const SavedProjects = () => {
           <button
             type="button"
             onClick={() => {
+              navigate("/login", { replace: true });
+            }}
+            style={{
+              border: "1px solid #ddd",
+              background: "#fff",
+              borderRadius: 4,
+              padding: "4px 8px",
+              cursor: "pointer",
+              fontSize: 12,
+            }}
+          >
+            Switch Account
+          </button>
+          <button
+            type="button"
+            onClick={() => {
               clearSession();
               navigate("/login", { replace: true });
             }}

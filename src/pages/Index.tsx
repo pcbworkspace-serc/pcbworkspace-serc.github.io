@@ -453,6 +453,15 @@ const Index = () => {
         <button
           type="button"
           onClick={() => {
+            navigate("/login", { replace: true });
+          }}
+          className="text-xs rounded border border-primary/40 px-2 py-1 text-primary hover:bg-primary/10 transition-colors"
+        >
+          Switch Account
+        </button>
+        <button
+          type="button"
+          onClick={() => {
             clearSession();
             navigate("/login", { replace: true });
           }}

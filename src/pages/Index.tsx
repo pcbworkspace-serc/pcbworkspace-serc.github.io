@@ -397,6 +397,12 @@ const Index = () => {
 
         <CameraFeed />
         <Inventory />
+
+        <div className="mt-auto pt-2">
+          <span className="rounded border border-white/40 bg-black/85 px-3 py-1 text-sm font-bold tracking-wide text-white shadow-lg">
+            Educational Version
+          </span>
+        </div>
       </div>
 
       {/* Main Workspace */}
@@ -445,12 +451,6 @@ const Index = () => {
             }}
           />
         </div>
-      </div>
-
-      <div className="fixed bottom-4 left-4 z-[9999] pointer-events-none">
-        <span className="rounded border border-white/40 bg-black/85 px-3 py-1 text-sm font-bold tracking-wide text-white shadow-lg">
-          Educational Version
-        </span>
       </div>
 
       {/* Logo */}

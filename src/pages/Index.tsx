@@ -385,10 +385,10 @@ const Index = () => {
   return (
     <div className="h-screen w-screen flex overflow-hidden relative">
       {/* Left Sidebar */}
-      <div className="flex flex-col gap-3 p-3 w-[300px] shrink-0">
+      <div className="flex flex-col gap-3 p-3 w-[320px] shrink-0">
         {/* Title */}
         <div className="flex items-center gap-2">
-          <img src="/serc-robot-transparent.png" alt="SERC Robot" className="h-36 w-36 object-contain" />
+          <img src="/serc-robot-transparent.png" alt="SERC Robot" className="h-40 w-40 object-contain" />
           <div>
             <h1 className="font-bold text-2xl leading-tight text-black">Mini MEE</h1>
             <p className="text-sm font-semibold text-black">Be My Engineer!</p>

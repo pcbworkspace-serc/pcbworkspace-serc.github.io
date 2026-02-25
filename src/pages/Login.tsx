@@ -9,18 +9,21 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [accessCode, setAccessCode] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (isAuthenticated()) {
     return <Navigate to="/" replace />;
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
+    setIsSubmitting(true);
 
-    const result = authenticate(email, password, accessCode);
+    const result = await authenticate(email, password, accessCode);
     if (!result.ok) {
       setError(result.error);
+      setIsSubmitting(false);
       return;
     }
 
@@ -87,9 +90,10 @@ export default function Login() {
 
           <button
             type="submit"
+            disabled={isSubmitting}
             className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
-            Continue
+            {isSubmitting ? "Checking..." : "Continue"}
           </button>
         </form>
       </div>

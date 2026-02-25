@@ -85,6 +85,30 @@ git push origin main
 	- Branch: `main`
 	- Folder: `/docs`
 
+## One-time code backend setup (Supabase)
+
+New account registration now requires a one-time access code validated by Supabase.
+
+1. Create a `.env` file from `.env.example` and fill in:
+
+```sh
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+```
+
+2. In Supabase SQL editor, run:
+
+```sql
+-- see full script
+supabase/access_codes.sql
+```
+
+3. Add buyer codes in `access_codes` table.
+
+4. Share codes only from `spaceroboticscreations@outlook.com`.
+
+Without these env vars, new signups are blocked and users are asked to contact support.
+
 ## Can I connect a custom domain to my Lovable project?
 
 Yes, you can!

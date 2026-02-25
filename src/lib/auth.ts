@@ -1,12 +1,8 @@
+import { consumeAccessCode, isLicenseBackendConfigured } from "@/lib/license";
+
 type StoredUser = {
   email: string;
   password: string;
-};
-
-type AccessCodeRecord = {
-  code: string;
-  usedBy: string;
-  usedAt: number;
 };
 
 type AuthSuccess = {
@@ -28,11 +24,8 @@ const SAVED_PROJECTS_PREFIX = "pcbworkspace.savedProjects.v2";
 const RECENTS_PREFIX = "pcbworkspace.recentFiles.v2";
 const LEGACY_SAVED_PROJECTS_KEY = "savedProjects";
 const LEGACY_RECENTS_KEY = "pcbworkspace.recentFiles.v1";
-const USED_ACCESS_CODES_KEY = "pcbworkspace.usedAccessCodes.v1";
 
 const SUPPORT_EMAIL = "spaceroboticscreations@outlook.com";
-
-const ISSUED_ACCESS_CODES = ["SERC-2026-ALPHA", "SERC-2026-BETA", "SERC-2026-GAMMA", "SERC-2026-DELTA"];
 
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -58,33 +51,6 @@ function readUsers(): StoredUser[] {
 
 function writeUsers(users: StoredUser[]) {
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-
-function normalizeAccessCode(code: string) {
-  return code.trim().toUpperCase();
-}
-
-function readUsedAccessCodes(): AccessCodeRecord[] {
-  try {
-    const raw = localStorage.getItem(USED_ACCESS_CODES_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed.filter(
-      (item): item is AccessCodeRecord =>
-        !!item &&
-        typeof (item as { code?: unknown }).code === "string" &&
-        typeof (item as { usedBy?: unknown }).usedBy === "string" &&
-        typeof (item as { usedAt?: unknown }).usedAt === "number",
-    );
-  } catch {
-    return [];
-  }
-}
-
-function writeUsedAccessCodes(records: AccessCodeRecord[]) {
-  localStorage.setItem(USED_ACCESS_CODES_KEY, JSON.stringify(records));
 }
 
 export function getCurrentUserEmail() {
@@ -121,7 +87,7 @@ function migrateLegacyData(email: string) {
   }
 }
 
-export function authenticate(emailInput: string, password: string, accessCodeInput?: string): AuthResult {
+export async function authenticate(emailInput: string, password: string, accessCodeInput?: string): Promise<AuthResult> {
   const email = normalizeEmail(emailInput);
   if (!email || !email.includes("@")) {
     return { ok: false, error: "Enter a valid email address." };
@@ -135,7 +101,7 @@ export function authenticate(emailInput: string, password: string, accessCodeInp
   const existingUser = users.find((user) => normalizeEmail(user.email) === email);
 
   if (!existingUser) {
-    const accessCode = normalizeAccessCode(accessCodeInput ?? "");
+    const accessCode = (accessCodeInput ?? "").trim();
     if (!accessCode) {
       return {
         ok: false,
@@ -143,26 +109,23 @@ export function authenticate(emailInput: string, password: string, accessCodeInp
       };
     }
 
-    const issuedCodes = ISSUED_ACCESS_CODES.map(normalizeAccessCode);
-    if (!issuedCodes.includes(accessCode)) {
+    if (!isLicenseBackendConfigured()) {
       return {
         ok: false,
-        error: `Invalid access code. Contact ${SUPPORT_EMAIL}.`,
+        error: `License verification service not configured yet. Contact ${SUPPORT_EMAIL}.`,
       };
     }
 
-    const usedCodes = readUsedAccessCodes();
-    const alreadyUsed = usedCodes.some((record) => normalizeAccessCode(record.code) === accessCode);
-    if (alreadyUsed) {
+    const consumeResult = await consumeAccessCode(accessCode, email);
+    if (!consumeResult.ok) {
       return {
         ok: false,
-        error: "This access code has already been used.",
+        error: consumeResult.error,
       };
     }
 
     const nextUsers = [...users, { email, password }];
     writeUsers(nextUsers);
-    writeUsedAccessCodes([...usedCodes, { code: accessCode, usedBy: email, usedAt: Date.now() }]);
     localStorage.setItem(SESSION_KEY, email);
     migrateLegacyData(email);
     return { ok: true, mode: "register", email };

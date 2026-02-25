@@ -64,6 +64,9 @@ This project is built with:
 
 This repository is configured for GitHub Pages from the `main` branch using the `/docs` folder.
 
+Automatic deploy is enabled via GitHub Actions workflow in `.github/workflows/auto-build-docs.yml`.
+After this file is pushed, any push to `main` (except docs-only changes) rebuilds `docs/` and commits it automatically.
+
 1. Build the site:
 
 ```sh

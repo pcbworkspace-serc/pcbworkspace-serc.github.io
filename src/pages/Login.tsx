@@ -28,6 +28,9 @@ export default function Login() {
 
   return (
     <div className="min-h-screen w-screen flex items-center justify-center bg-background px-4">
+      <div className="absolute top-3 left-3 pointer-events-none">
+        <img src="/serc-robot-transparent.png" alt="SERC Robot" className="h-20 w-20 object-contain" />
+      </div>
       <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-sm">
         <h1 className="text-2xl font-bold text-foreground">Mini MEE Login</h1>
         <p className="mt-1 text-sm text-muted-foreground">

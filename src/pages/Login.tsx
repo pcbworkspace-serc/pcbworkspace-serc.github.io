@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
-import { authenticate, getCurrentUserEmail, isAuthenticated } from "@/lib/auth";
+import { useNavigate } from "react-router-dom";
+import { authenticate, getCurrentUserEmail } from "@/lib/auth";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -10,10 +10,6 @@ export default function Login() {
   const [accessCode, setAccessCode] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  if (isAuthenticated()) {
-    return <Navigate to="/" replace />;
-  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -37,6 +33,9 @@ export default function Login() {
         <p className="mt-1 text-sm text-muted-foreground">
           Sign in with your email. New accounts require a one-time access code from spaceroboticscreations@outlook.com.
         </p>
+        {currentUserEmail ? (
+          <p className="mt-1 text-xs text-muted-foreground">Currently signed in as {currentUserEmail}. You can switch accounts below.</p>
+        ) : null}
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>

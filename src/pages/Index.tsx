@@ -388,10 +388,10 @@ const Index = () => {
       <div className="flex flex-col gap-3 p-3 w-[240px] shrink-0">
         {/* Title */}
         <div className="flex items-center gap-2">
-          <img src="/serc-robot-transparent.png" alt="SERC Robot" className="h-36 w-36 object-contain" />
+          <img src="/serc-robot-transparent.png" alt="SERC Robot" className="h-28 w-28 object-contain" />
           <div>
-            <h1 className="font-bold text-2xl leading-tight text-black">Mini MEE</h1>
-            <p className="text-sm font-semibold text-black">Be My Engineer!</p>
+            <h1 className="font-bold text-xl leading-tight text-black">Mini MEE</h1>
+            <p className="text-xs font-semibold text-black">Be My Engineer!</p>
           </div>
         </div>
 

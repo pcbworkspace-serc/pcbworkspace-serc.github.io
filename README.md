@@ -142,6 +142,16 @@ Power Automate quick-start files are in `automation/`:
 - `automation/power-automate-request-schema.json`
 - `automation/power-automate-sample-payload.json`
 
+## PayPal buyer tracking + auto one-time code
+
+For your PayPal payment link (`https://www.paypal.com/ncp/payment/CBD88P2LKUHB8`), use:
+
+- `supabase/paypal_purchases.sql`
+- `automation/paypal-webhook-request-schema.json`
+- `automation/paypal-to-code-flow.md`
+
+This setup records each buyer in `purchases`, generates a unique access code, and emails that code automatically.
+
 ## Can I connect a custom domain to my Lovable project?
 
 Yes, you can!

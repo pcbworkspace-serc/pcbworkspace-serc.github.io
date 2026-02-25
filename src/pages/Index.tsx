@@ -454,7 +454,7 @@ const Index = () => {
       </div>
 
       <div className="absolute bottom-3 left-3 z-50">
-        <span className="text-sm font-semibold italic tracking-wide text-blue-900">Educational Version</span>
+        <span className="text-lg font-extrabold italic tracking-wide text-blue-950">Educational Version</span>
       </div>
 
       {/* Logo */}

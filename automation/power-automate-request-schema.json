@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "required": ["to", "subject", "text", "html"],
+  "properties": {
+    "to": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string"
+    },
+    "html": {
+      "type": "string"
+    }
+  }
+}

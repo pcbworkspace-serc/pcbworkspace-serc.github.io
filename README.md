@@ -137,6 +137,11 @@ Webhook payload format:
 }
 ```
 
+Power Automate quick-start files are in `automation/`:
+- `automation/power-automate-setup.md`
+- `automation/power-automate-request-schema.json`
+- `automation/power-automate-sample-payload.json`
+
 ## Can I connect a custom domain to my Lovable project?
 
 Yes, you can!

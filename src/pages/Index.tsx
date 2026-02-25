@@ -448,7 +448,9 @@ const Index = () => {
       </div>
 
       <div className="absolute bottom-3 left-3 z-50">
-        <span className="text-xs font-semibold text-primary/90">Educational Version</span>
+        <span className="rounded border border-white/30 bg-black/70 px-3 py-1 text-sm font-bold tracking-wide text-white">
+          Educational Version
+        </span>
       </div>
 
       {/* Logo */}

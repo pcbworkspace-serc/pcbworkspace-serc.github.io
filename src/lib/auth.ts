@@ -1,4 +1,5 @@
 import { consumeAccessCode, isLicenseBackendConfigured } from "@/lib/license";
+import { sendWelcomeEmail } from "@/lib/welcomeEmail";
 
 type StoredUser = {
   email: string;
@@ -128,6 +129,7 @@ export async function authenticate(emailInput: string, password: string, accessC
     writeUsers(nextUsers);
     localStorage.setItem(SESSION_KEY, email);
     migrateLegacyData(email);
+    void sendWelcomeEmail(email);
     return { ok: true, mode: "register", email };
   }
 

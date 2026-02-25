@@ -109,6 +109,34 @@ supabase/access_codes.sql
 
 Without these env vars, new signups are blocked and users are asked to contact support.
 
+## Welcome email setup (SERC)
+
+On successful new registration, the app can send a welcome email through a webhook.
+
+Set these in `.env` (and in GitHub Actions environment/secrets for production):
+
+```sh
+VITE_WELCOME_EMAIL_WEBHOOK_URL=...
+VITE_PCB_WORKSPACE_ACCESS_VIDEO_URL=...
+VITE_SUPPORT_EMAIL=spaceroboticscreations@outlook.com
+```
+
+Email content is generated in `src/lib/welcomeEmail.ts` with:
+- A welcoming message from SERC
+- The same `PCB Workspace Access` video link (from `VITE_PCB_WORKSPACE_ACCESS_VIDEO_URL`)
+- Support contact email
+
+Webhook payload format:
+
+```json
+{
+	"to": "buyer@example.com",
+	"subject": "Welcome to PCB Workspace Access — SERC",
+	"text": "...",
+	"html": "..."
+}
+```
+
 ## Can I connect a custom domain to my Lovable project?
 
 Yes, you can!

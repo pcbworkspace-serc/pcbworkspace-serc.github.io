@@ -7,6 +7,7 @@ export default function Login() {
   const currentUserEmail = getCurrentUserEmail();
   const [email, setEmail] = useState(currentUserEmail ?? "");
   const [password, setPassword] = useState("");
+  const [accessCode, setAccessCode] = useState("");
   const [error, setError] = useState("");
 
   if (isAuthenticated()) {
@@ -17,7 +18,7 @@ export default function Login() {
     event.preventDefault();
     setError("");
 
-    const result = authenticate(email, password);
+    const result = authenticate(email, password, accessCode);
     if (!result.ok) {
       setError(result.error);
       return;
@@ -30,7 +31,9 @@ export default function Login() {
     <div className="min-h-screen w-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-sm">
         <h1 className="text-2xl font-bold text-foreground">Mini MEE Login</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Sign in with your email. New emails are created automatically.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Sign in with your email. New accounts require a one-time access code from spaceroboticscreations@outlook.com.
+        </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
@@ -62,6 +65,21 @@ export default function Login() {
               onChange={(event) => setPassword(event.target.value)}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
               placeholder="Enter your password"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="accessCode" className="block text-sm font-medium text-foreground mb-1">
+              One-Time Access Code (new accounts only)
+            </label>
+            <input
+              id="accessCode"
+              type="text"
+              autoComplete="off"
+              value={accessCode}
+              onChange={(event) => setAccessCode(event.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              placeholder="Enter code from spaceroboticscreations@outlook.com"
             />
           </div>
 

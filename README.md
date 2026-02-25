@@ -73,11 +73,11 @@ After this file is pushed, any push to `main` (except docs-only changes) rebuild
 npm run pages
 ```
 
-2. Commit and push the updated `docs/` output:
+2. Commit and push your source changes:
 
 ```sh
 git add .
-git commit -m "Deploy latest site"
+git commit -m "Update site"
 git push origin main
 ```
 

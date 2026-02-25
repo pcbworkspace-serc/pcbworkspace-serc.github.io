@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { getCurrentUserEmail, getSavedProjectsKey } from "@/lib/auth";
 
 type SavedProject = {
   id: string;
@@ -11,11 +12,12 @@ type SavedFilesProps = {
   onOpenProject?: (projectId: string) => void;
 };
 
-const SAVED_PROJECTS_KEY = "savedProjects";
-
 function loadSavedProjects(): SavedProject[] {
+  const email = getCurrentUserEmail();
+  if (!email) return [];
+
   try {
-    const raw = localStorage.getItem(SAVED_PROJECTS_KEY);
+    const raw = localStorage.getItem(getSavedProjectsKey(email));
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { clearSession, getCurrentUserEmail, getSavedProjectsKey } from "@/lib/auth";
 
 type Project = {
   id: string;
@@ -7,11 +8,12 @@ type Project = {
   lastOpened: number;
 };
 
-const SAVED_PROJECTS_KEY = "savedProjects";
-
 function loadProjects(): Project[] {
+  const email = getCurrentUserEmail();
+  if (!email) return [];
+
   try {
-    const stored = localStorage.getItem(SAVED_PROJECTS_KEY);
+    const stored = localStorage.getItem(getSavedProjectsKey(email));
     if (!stored) return [];
 
     const parsed = JSON.parse(stored) as unknown;
@@ -41,13 +43,16 @@ function loadProjects(): Project[] {
 }
 
 function saveProjects(projects: Project[]) {
-  localStorage.setItem(SAVED_PROJECTS_KEY, JSON.stringify(projects));
+  const email = getCurrentUserEmail();
+  if (!email) return;
+  localStorage.setItem(getSavedProjectsKey(email), JSON.stringify(projects));
   window.dispatchEvent(new Event("saved-projects-updated"));
 }
 
 const SavedProjects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const navigate = useNavigate();
+  const email = getCurrentUserEmail();
 
   useEffect(() => {
     const refresh = () => setProjects(loadProjects());
@@ -75,8 +80,28 @@ const SavedProjects = () => {
 
   return (
     <div style={{ padding: 20 }}>
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <Link to="/">← Back to workspace</Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <small>{email ?? ""}</small>
+          <button
+            type="button"
+            onClick={() => {
+              clearSession();
+              navigate("/login", { replace: true });
+            }}
+            style={{
+              border: "1px solid #ddd",
+              background: "#fff",
+              borderRadius: 4,
+              padding: "4px 8px",
+              cursor: "pointer",
+              fontSize: 12,
+            }}
+          >
+            Logout
+          </button>
+        </div>
       </div>
       <h1 style={{ marginBottom: 14 }}>Saved Projects</h1>
 

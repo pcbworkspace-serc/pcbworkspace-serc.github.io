@@ -5,6 +5,7 @@ import SavedFiles from "@/components/SavedFiles";
 import { useEffect } from "react";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { clearSession, getCurrentUserEmail, getRecentsKey, getSavedProjectsKey } from "@/lib/auth";
 
 type RecentFile = {
   name: string;
@@ -32,14 +33,15 @@ type SavedProject = {
   };
 };
 
-const RECENTS_KEY = "pcbworkspace.recentFiles.v1";
-const SAVED_PROJECTS_KEY = "savedProjects";
 const MAX_RECENTS = 6;
 const MAX_SAVED_PROJECTS = 20;
 
 function loadRecents(): RecentFile[] {
+  const email = getCurrentUserEmail();
+  if (!email) return [];
+
   try {
-    const raw = localStorage.getItem(RECENTS_KEY);
+    const raw = localStorage.getItem(getRecentsKey(email));
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
@@ -53,8 +55,11 @@ function loadRecents(): RecentFile[] {
 }
 
 function loadSavedProjects(): SavedProject[] {
+  const email = getCurrentUserEmail();
+  if (!email) return [];
+
   try {
-    const raw = localStorage.getItem(SAVED_PROJECTS_KEY);
+    const raw = localStorage.getItem(getSavedProjectsKey(email));
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
@@ -112,7 +117,10 @@ function loadSavedProjects(): SavedProject[] {
 }
 
 function saveProjects(projects: SavedProject[]) {
-  localStorage.setItem(SAVED_PROJECTS_KEY, JSON.stringify(projects.slice(0, MAX_SAVED_PROJECTS)));
+  const email = getCurrentUserEmail();
+  if (!email) return;
+
+  localStorage.setItem(getSavedProjectsKey(email), JSON.stringify(projects.slice(0, MAX_SAVED_PROJECTS)));
   window.dispatchEvent(new Event("saved-projects-updated"));
 }
 
@@ -144,6 +152,7 @@ const Index = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [boardItems, setBoardItems] = useState<BoardItem[]>([]);
+  const email = getCurrentUserEmail();
 
   useEffect(() => {
     const normalized = loadSavedProjects();
@@ -161,10 +170,12 @@ const Index = () => {
     setBoardItems(restoredItems);
 
     const updatedRecents = [{ name: `${project.name}.json`, openedAt: Date.now() }, ...loadRecents()].slice(0, MAX_RECENTS);
-    localStorage.setItem(RECENTS_KEY, JSON.stringify(updatedRecents));
+    if (email) {
+      localStorage.setItem(getRecentsKey(email), JSON.stringify(updatedRecents));
+    }
     alert(`Opened project: ${project.name}`);
     navigate("/", { replace: true, state: null });
-  }, [location.state, navigate]);
+  }, [location.state, navigate, email]);
 
   const handleSaveProject = () => {
     const timestamp = Date.now();
@@ -180,7 +191,9 @@ const Index = () => {
     };
 
     const updatedRecents = [{ name: `${projectName}.json`, openedAt: timestamp }, ...loadRecents()].slice(0, MAX_RECENTS);
-    localStorage.setItem(RECENTS_KEY, JSON.stringify(updatedRecents));
+    if (email) {
+      localStorage.setItem(getRecentsKey(email), JSON.stringify(updatedRecents));
+    }
 
     const projectSnapshot = {
       schemaVersion: 2,
@@ -298,7 +311,9 @@ const Index = () => {
               : [];
 
             if (importedRecents.length > 0) {
-              localStorage.setItem(RECENTS_KEY, JSON.stringify(importedRecents.slice(0, MAX_RECENTS)));
+              if (email) {
+                localStorage.setItem(getRecentsKey(email), JSON.stringify(importedRecents.slice(0, MAX_RECENTS)));
+              }
             }
 
             const mostRecent = mergedProjects[0];
@@ -433,14 +448,27 @@ const Index = () => {
       </div>
 
       {/* Logo */}
-      <a
-        href="https://spaceroboticscreations.com/"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="absolute top-3 right-3 text-primary text-xs font-bold opacity-70 hover:opacity-100 transition-opacity"
-      >
-        SERC ↗
-      </a>
+      <div className="absolute top-3 right-3 flex items-center gap-2">
+        <span className="text-xs text-primary/90 max-w-[180px] truncate">{email ?? ""}</span>
+        <button
+          type="button"
+          onClick={() => {
+            clearSession();
+            navigate("/login", { replace: true });
+          }}
+          className="text-xs rounded border border-primary/40 px-2 py-1 text-primary hover:bg-primary/10 transition-colors"
+        >
+          Logout
+        </button>
+        <a
+          href="https://spaceroboticscreations.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary text-xs font-bold opacity-70 hover:opacity-100 transition-opacity"
+        >
+          SERC ↗
+        </a>
+      </div>
     </div>
   );
 };

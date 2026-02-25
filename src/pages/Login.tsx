@@ -28,10 +28,10 @@ export default function Login() {
 
   return (
     <div className="min-h-screen w-screen flex items-center justify-center bg-background px-4">
-      <div className="absolute top-3 left-3 pointer-events-none">
-        <img src="/serc-robot-transparent.png" alt="SERC Robot" className="h-28 w-28 object-contain" />
-      </div>
-      <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-sm">
+      <div className="relative w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-sm">
+        <div className="pointer-events-none absolute -top-20 right-0">
+          <img src="/serc-robot-transparent.png" alt="SERC Robot" className="h-40 w-40 object-contain" />
+        </div>
         <h1 className="text-2xl font-bold text-foreground">Mini MEE Login</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Sign in with your email. New accounts require a one-time access code from spaceroboticscreations@outlook.com.

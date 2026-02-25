@@ -447,8 +447,8 @@ const Index = () => {
         </div>
       </div>
 
-      <div className="absolute bottom-3 left-3 z-50">
-        <span className="rounded border border-white/30 bg-black/70 px-3 py-1 text-sm font-bold tracking-wide text-white">
+      <div className="fixed bottom-4 left-4 z-[9999] pointer-events-none">
+        <span className="rounded border border-white/40 bg-black/85 px-3 py-1 text-sm font-bold tracking-wide text-white shadow-lg">
           Educational Version
         </span>
       </div>

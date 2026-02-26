@@ -88,7 +88,7 @@ function migrateLegacyData(email: string) {
   }
 }
 
-export async function authenticate(emailInput: string, password: string, accessCodeInput?: string): Promise<AuthResult> {
+export async function login(emailInput: string, password: string): Promise<AuthResult> {
   const email = normalizeEmail(emailInput);
   if (!email || !email.includes("@")) {
     return { ok: false, error: "Enter a valid email address." };
@@ -98,17 +98,27 @@ export async function authenticate(emailInput: string, password: string, accessC
     return { ok: false, error: "Password must be at least 4 characters." };
   }
 
-  // --- Try to sign in with existing credentials first ---
-  const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-
-  if (!signInError && signInData.session) {
-    _userEmail = email;
-    migrateLegacyData(email);
-    return { ok: true, mode: "login", email };
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error || !data.session) {
+    return { ok: false, error: error?.message ?? "Sign-in failed." };
   }
 
-  // --- Sign-in failed – could be wrong password or user doesn't exist ---
-  const accessCode = (accessCodeInput ?? "").trim();
+  _userEmail = email;
+  migrateLegacyData(email);
+  return { ok: true, mode: "login", email };
+}
+
+export async function signup(emailInput: string, password: string, accessCodeInput: string): Promise<AuthResult> {
+  const email = normalizeEmail(emailInput);
+  if (!email || !email.includes("@")) {
+    return { ok: false, error: "Enter a valid email address." };
+  }
+
+  if (!password || password.length < 4) {
+    return { ok: false, error: "Password must be at least 4 characters." };
+  }
+
+  const accessCode = accessCodeInput.trim();
   if (!accessCode) {
     return {
       ok: false,
@@ -118,18 +128,12 @@ export async function authenticate(emailInput: string, password: string, accessC
 
   // Attempt to create the account first so that a network/validation error does
   // not silently burn the access code.
-  // Note: signUp is called before the isLicenseBackendConfigured() check intentionally –
-  // this prevents the bundler from tree-shaking the signUp call when env vars are absent
-  // at build time. If signUp fails (e.g. due to a missing Supabase config), the error
-  // handler below provides a clear "not configured" message. If signUp succeeds, Supabase
-  // must be configured, so isLicenseBackendConfigured() will be true and consumeAccessCode
-  // will proceed normally.
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
 
   if (signUpError) {
     const msg = signUpError.message.toLowerCase();
     if (msg.includes("already registered") || msg.includes("already been registered")) {
-      return { ok: false, error: "Incorrect password for this email." };
+      return { ok: false, error: "An account with this email already exists. Use the Log in tab instead." };
     }
     if (!isLicenseBackendConfigured()) {
       return {

@@ -116,21 +116,26 @@ export async function authenticate(emailInput: string, password: string, accessC
     };
   }
 
-  if (!isLicenseBackendConfigured()) {
-    return {
-      ok: false,
-      error: `License verification service not configured yet. Contact ${SUPPORT_EMAIL}.`,
-    };
-  }
-
   // Attempt to create the account first so that a network/validation error does
   // not silently burn the access code.
+  // Note: signUp is called before the isLicenseBackendConfigured() check intentionally –
+  // this prevents the bundler from tree-shaking the signUp call when env vars are absent
+  // at build time. If signUp fails (e.g. due to a missing Supabase config), the error
+  // handler below provides a clear "not configured" message. If signUp succeeds, Supabase
+  // must be configured, so isLicenseBackendConfigured() will be true and consumeAccessCode
+  // will proceed normally.
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
 
   if (signUpError) {
     const msg = signUpError.message.toLowerCase();
     if (msg.includes("already registered") || msg.includes("already been registered")) {
       return { ok: false, error: "Incorrect password for this email." };
+    }
+    if (!isLicenseBackendConfigured()) {
+      return {
+        ok: false,
+        error: `License verification service not configured yet. Contact ${SUPPORT_EMAIL}.`,
+      };
     }
     return { ok: false, error: signUpError.message };
   }

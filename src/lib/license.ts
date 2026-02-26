@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { supabase, isSupabaseConfigured } from "@/supabaseClient";
 
 type ConsumeCodeResult =
   | { ok: true }
@@ -9,30 +9,8 @@ type ConsumeCodeResult =
 
 const SUPPORT_EMAIL = "spaceroboticscreations@outlook.com";
 
-let supabaseClient: SupabaseClient | null = null;
-
-function getSupabaseUrl() {
-  return import.meta.env.VITE_SUPABASE_URL?.trim() ?? "";
-}
-
-function getSupabaseAnonKey() {
-  return import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ?? "";
-}
-
 export function isLicenseBackendConfigured() {
-  return !!getSupabaseUrl() && !!getSupabaseAnonKey();
-}
-
-function getSupabaseClient() {
-  if (!isLicenseBackendConfigured()) {
-    return null;
-  }
-
-  if (!supabaseClient) {
-    supabaseClient = createClient(getSupabaseUrl(), getSupabaseAnonKey());
-  }
-
-  return supabaseClient;
+  return isSupabaseConfigured();
 }
 
 function normalizeCode(code: string) {
@@ -45,15 +23,14 @@ export async function consumeAccessCode(accessCodeInput: string, email: string):
     return { ok: false, error: "Access code is required." };
   }
 
-  const client = getSupabaseClient();
-  if (!client) {
+  if (!isLicenseBackendConfigured()) {
     return {
       ok: false,
       error: `License verification service not configured yet. Contact ${SUPPORT_EMAIL}.`,
     };
   }
 
-  const { data: codeRow, error: lookupError } = await client
+  const { data: codeRow, error: lookupError } = await supabase
     .from("access_codes")
     .select("code, is_used")
     .eq("code", accessCode)
@@ -71,7 +48,7 @@ export async function consumeAccessCode(accessCodeInput: string, email: string):
     return { ok: false, error: "This access code has already been used." };
   }
 
-  const { data: consumedRows, error: consumeError } = await client
+  const { data: consumedRows, error: consumeError } = await supabase
     .from("access_codes")
     .update({
       is_used: true,

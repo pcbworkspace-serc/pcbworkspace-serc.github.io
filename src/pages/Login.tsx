@@ -1,24 +1,44 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { authenticate, getCurrentUserEmail } from "@/lib/auth";
+import { authenticate, authReadyPromise, getCurrentUserEmail } from "@/lib/auth";
 
 export default function Login() {
   const navigate = useNavigate();
-  const currentUserEmail = getCurrentUserEmail();
-  const [email, setEmail] = useState(currentUserEmail ?? "");
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [accessCode, setAccessCode] = useState("");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    authReadyPromise
+      .then(() => {
+        const e = getCurrentUserEmail();
+        setCurrentUserEmail(e);
+        if (e) setEmail(e);
+      })
+      .catch(() => {
+        // Auth initialization failed; continue with no pre-filled email.
+      });
+  }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
+    setInfo("");
     setIsSubmitting(true);
 
     const result = await authenticate(email, password, accessCode);
     if (!result.ok) {
       setError(result.error);
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (result.mode === "confirm") {
+      setInfo("Account created! Check your email to confirm your account before signing in.");
       setIsSubmitting(false);
       return;
     }
@@ -89,6 +109,7 @@ export default function Login() {
           </div>
 
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {info ? <p className="text-sm text-green-600">{info}</p> : null}
 
           <button
             type="submit"

@@ -1,14 +1,10 @@
+import { supabase } from "@/supabaseClient";
 import { consumeAccessCode, isLicenseBackendConfigured } from "@/lib/license";
 import { sendWelcomeEmail } from "@/lib/welcomeEmail";
 
-type StoredUser = {
-  email: string;
-  password: string;
-};
-
 type AuthSuccess = {
   ok: true;
-  mode: "login" | "register";
+  mode: "login" | "register" | "confirm";
   email: string;
 };
 
@@ -19,8 +15,6 @@ type AuthFailure = {
 
 export type AuthResult = AuthSuccess | AuthFailure;
 
-const USERS_KEY = "pcbworkspace.users.v1";
-const SESSION_KEY = "pcbworkspace.session.v1";
 const SAVED_PROJECTS_PREFIX = "pcbworkspace.savedProjects.v2";
 const RECENTS_PREFIX = "pcbworkspace.recentFiles.v2";
 const LEGACY_SAVED_PROJECTS_KEY = "savedProjects";
@@ -32,41 +26,47 @@ export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
-function readUsers(): StoredUser[] {
-  try {
-    const raw = localStorage.getItem(USERS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
+// ---------------------------------------------------------------------------
+// Auth-ready promise – resolves once the initial Supabase session is known.
+// Components can await this before checking isAuthenticated().
+// ---------------------------------------------------------------------------
+let _userEmail: string | null = null;
+let _authReady = false;
+let _authReadyResolve!: () => void;
 
-    return parsed.filter(
-      (item): item is StoredUser =>
-        !!item &&
-        typeof (item as { email?: unknown }).email === "string" &&
-        typeof (item as { password?: unknown }).password === "string",
-    );
-  } catch {
-    return [];
+export const authReadyPromise = new Promise<void>((resolve) => {
+  _authReadyResolve = resolve;
+});
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  _userEmail = session?.user?.email ?? null;
+  if (!_authReady) {
+    _authReady = true;
+    _authReadyResolve();
   }
+});
+
+// Belt-and-suspenders: also resolve from getSession() in case onAuthStateChange
+// fires after the first render cycle.
+void supabase.auth.getSession().then(({ data }) => {
+  if (!_authReady) {
+    _userEmail = data.session?.user?.email ?? null;
+    _authReady = true;
+    _authReadyResolve();
+  }
+});
+
+export function getCurrentUserEmail(): string | null {
+  return _userEmail;
 }
 
-function writeUsers(users: StoredUser[]) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+export function isAuthenticated(): boolean {
+  return _userEmail !== null;
 }
 
-export function getCurrentUserEmail() {
-  const stored = localStorage.getItem(SESSION_KEY);
-  if (!stored) return null;
-  const normalized = normalizeEmail(stored);
-  return normalized.length > 0 ? normalized : null;
-}
-
-export function isAuthenticated() {
-  return !!getCurrentUserEmail();
-}
-
-export function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
+export function clearSession(): void {
+  _userEmail = null;
+  void supabase.auth.signOut();
 }
 
 function migrateLegacyData(email: string) {
@@ -98,48 +98,58 @@ export async function authenticate(emailInput: string, password: string, accessC
     return { ok: false, error: "Password must be at least 4 characters." };
   }
 
-  const users = readUsers();
-  const existingUser = users.find((user) => normalizeEmail(user.email) === email);
+  // --- Try to sign in with existing credentials first ---
+  const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
-  if (!existingUser) {
-    const accessCode = (accessCodeInput ?? "").trim();
-    if (!accessCode) {
-      return {
-        ok: false,
-        error: `Access code required for new accounts. Contact ${SUPPORT_EMAIL}.`,
-      };
-    }
-
-    if (!isLicenseBackendConfigured()) {
-      return {
-        ok: false,
-        error: `License verification service not configured yet. Contact ${SUPPORT_EMAIL}.`,
-      };
-    }
-
-    const consumeResult = await consumeAccessCode(accessCode, email);
-    if (!consumeResult.ok) {
-      return {
-        ok: false,
-        error: consumeResult.error,
-      };
-    }
-
-    const nextUsers = [...users, { email, password }];
-    writeUsers(nextUsers);
-    localStorage.setItem(SESSION_KEY, email);
+  if (!signInError && signInData.session) {
+    _userEmail = email;
     migrateLegacyData(email);
-    void sendWelcomeEmail(email);
-    return { ok: true, mode: "register", email };
+    return { ok: true, mode: "login", email };
   }
 
-  if (existingUser.password !== password) {
-    return { ok: false, error: "Incorrect password for this email." };
+  // --- Sign-in failed – could be wrong password or user doesn't exist ---
+  const accessCode = (accessCodeInput ?? "").trim();
+  if (!accessCode) {
+    return {
+      ok: false,
+      error: `Access code required for new accounts. Contact ${SUPPORT_EMAIL}.`,
+    };
   }
 
-  localStorage.setItem(SESSION_KEY, email);
+  if (!isLicenseBackendConfigured()) {
+    return {
+      ok: false,
+      error: `License verification service not configured yet. Contact ${SUPPORT_EMAIL}.`,
+    };
+  }
+
+  // Attempt to create the account first so that a network/validation error does
+  // not silently burn the access code.
+  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
+
+  if (signUpError) {
+    const msg = signUpError.message.toLowerCase();
+    if (msg.includes("already registered") || msg.includes("already been registered")) {
+      return { ok: false, error: "Incorrect password for this email." };
+    }
+    return { ok: false, error: signUpError.message };
+  }
+
+  // Account created (or confirmation pending) – now consume the access code.
+  const consumeResult = await consumeAccessCode(accessCode, email);
+  if (!consumeResult.ok) {
+    return { ok: false, error: consumeResult.error };
+  }
+
+  if (!signUpData.session) {
+    // Supabase requires email confirmation before the session is active.
+    return { ok: true, mode: "confirm", email };
+  }
+
+  _userEmail = email;
   migrateLegacyData(email);
-  return { ok: true, mode: "login", email };
+  void sendWelcomeEmail(email);
+  return { ok: true, mode: "register", email };
 }
 
 export function getSavedProjectsKey(email: string) {

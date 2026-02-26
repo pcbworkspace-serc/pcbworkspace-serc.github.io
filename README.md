@@ -87,7 +87,7 @@ git push origin main
 
 ## One-time code backend setup (Supabase)
 
-New account registration now requires a one-time access code validated by Supabase.
+Authentication now uses **Supabase Auth** (email + password). New account registration additionally requires a one-time access code validated against the Supabase `access_codes` table.
 
 1. Create a `.env` file from `.env.example` and fill in:
 
@@ -106,6 +106,11 @@ supabase/access_codes.sql
 3. Add buyer codes in `access_codes` table.
 
 4. Share codes only from `spaceroboticscreations@outlook.com`.
+
+### Login flow
+- **Existing user**: enter email + password → signs in via Supabase Auth. No access code needed.
+- **New user**: enter email + password + one-time access code → access code is consumed, then Supabase account is created. If email confirmation is enabled in Supabase, a confirmation message is shown and the user must confirm before signing in.
+- **Logout**: signs out of Supabase Auth. No credentials are stored in localStorage.
 
 Without these env vars, new signups are blocked and users are asked to contact support.
 

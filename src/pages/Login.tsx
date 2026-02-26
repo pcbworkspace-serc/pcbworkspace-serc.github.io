@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { authenticate, authReadyPromise, getCurrentUserEmail } from "@/lib/auth";
+import { login, signup, authReadyPromise, getCurrentUserEmail } from "@/lib/auth";
 
 export default function Login() {
   const navigate = useNavigate();
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,13 +25,22 @@ export default function Login() {
       });
   }, []);
 
+  const switchMode = (next: "login" | "signup") => {
+    setMode(next);
+    setError("");
+    setInfo("");
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     setInfo("");
     setIsSubmitting(true);
 
-    const result = await authenticate(email, password, accessCode);
+    const result = mode === "login"
+      ? await login(email, password)
+      : await signup(email, password, accessCode);
+
     if (!result.ok) {
       setError(result.error);
       setIsSubmitting(false);
@@ -53,14 +63,28 @@ export default function Login() {
           <img src="/serc-robot-transparent.png" alt="SERC Robot" className="h-40 w-40 object-contain" />
         </div>
         <h1 className="text-2xl font-bold text-foreground">Mini MEE Login</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Sign in with your email. New accounts require a one-time access code from spaceroboticscreations@outlook.com.
-        </p>
         {currentUserEmail ? (
           <p className="mt-1 text-xs text-muted-foreground">Currently signed in as {currentUserEmail}. You can switch accounts below.</p>
         ) : null}
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <div className="mt-4 flex rounded-md border border-border overflow-hidden">
+          <button
+            type="button"
+            onClick={() => switchMode("login")}
+            className={`flex-1 py-2 text-sm font-medium transition-colors ${mode === "login" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+          >
+            Log in
+          </button>
+          <button
+            type="button"
+            onClick={() => switchMode("signup")}
+            className={`flex-1 py-2 text-sm font-medium transition-colors ${mode === "signup" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+          >
+            Create account
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-foreground mb-1">
               Email
@@ -85,7 +109,7 @@ export default function Login() {
               id="password"
               type="password"
               required
-              autoComplete="current-password"
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
@@ -93,20 +117,23 @@ export default function Login() {
             />
           </div>
 
-          <div>
-            <label htmlFor="accessCode" className="block text-sm font-medium text-foreground mb-1">
-              One-Time Access Code (new accounts only)
-            </label>
-            <input
-              id="accessCode"
-              type="text"
-              autoComplete="off"
-              value={accessCode}
-              onChange={(event) => setAccessCode(event.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Enter code from spaceroboticscreations@outlook.com"
-            />
-          </div>
+          {mode === "signup" && (
+            <div>
+              <label htmlFor="accessCode" className="block text-sm font-medium text-foreground mb-1">
+                One-Time Access Code
+              </label>
+              <input
+                id="accessCode"
+                type="text"
+                required
+                autoComplete="off"
+                value={accessCode}
+                onChange={(event) => setAccessCode(event.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                placeholder="Enter code from spaceroboticscreations@outlook.com"
+              />
+            </div>
+          )}
 
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           {info ? <p className="text-sm text-green-600">{info}</p> : null}
@@ -116,7 +143,7 @@ export default function Login() {
             disabled={isSubmitting}
             className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
-            {isSubmitting ? "Checking..." : "Continue"}
+            {isSubmitting ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}
           </button>
         </form>
       </div>

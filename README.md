@@ -108,8 +108,11 @@ supabase/access_codes.sql
 4. Share codes only from `spaceroboticscreations@outlook.com`.
 
 ### Login flow
-- **Existing user**: enter email + password → signs in via Supabase Auth. No access code needed.
-- **New user**: enter email + password + one-time access code → access code is consumed, then Supabase account is created. If email confirmation is enabled in Supabase, a confirmation message is shown and the user must confirm before signing in.
+
+The login page presents two explicit tabs:
+
+- **Log in** tab: enter email + password → signs in via Supabase Auth. No access code needed.
+- **Create account** tab: enter email + password + one-time access code → access code is consumed, then Supabase account is created. If email confirmation is enabled in Supabase, a confirmation message is shown and the user must confirm before signing in.
 - **Logout**: signs out of Supabase Auth. No credentials are stored in localStorage.
 
 Without these env vars, new signups are blocked and users are asked to contact support.

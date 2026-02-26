@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>PCB Workspace SERC</title>
+    <script>
+      // GitHub Pages SPA redirect – single-page app 404 workaround.
+      // Encodes the current path/query/hash into the redirect query parameter
+      // and sends the browser to the root index.html, which then restores
+      // the original URL via history.replaceState.
+      // https://github.com/rafgraph/spa-github-pages
+      var l = window.location;
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        l.pathname.split('/').slice(0, 1).join('/') + '/?p=' +
+        encodeURIComponent(l.pathname + l.search) +
+        (l.hash ? '&h=' + encodeURIComponent(l.hash) : '')
+      );
+    </script>
+  </head>
+  <body></body>
+</html>

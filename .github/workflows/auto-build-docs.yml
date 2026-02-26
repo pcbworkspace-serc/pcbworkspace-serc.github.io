@@ -29,6 +29,12 @@ jobs:
 
       - name: Build docs
         run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_WELCOME_EMAIL_WEBHOOK_URL: ${{ secrets.VITE_WELCOME_EMAIL_WEBHOOK_URL }}
+          VITE_PCB_WORKSPACE_ACCESS_VIDEO_URL: ${{ vars.VITE_PCB_WORKSPACE_ACCESS_VIDEO_URL }}
+          VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL }}
 
       - name: Commit updated docs
         run: |

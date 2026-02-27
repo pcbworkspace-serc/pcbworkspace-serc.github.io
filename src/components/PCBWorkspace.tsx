@@ -1,7 +1,7 @@
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Grid, Text } from "@react-three/drei";
 import * as THREE from "three";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 
 interface DroppedItem {
   type: string;
@@ -13,8 +13,6 @@ type PCBWorkspaceProps = {
   items?: DroppedItem[];
   onItemsChange?: (items: DroppedItem[]) => void;
 };
-
-/* ── Realistic Components ── */
 
 function Resistor({ position }: { position: [number, number, number] }) {
   return (
@@ -149,8 +147,6 @@ function Transistor({ position }: { position: [number, number, number] }) {
   );
 }
 
-/* ── Channel Port Component ── */
-
 function ChannelPort({
   position,
   channelNumber,
@@ -158,37 +154,33 @@ function ChannelPort({
   position: [number, number, number];
   channelNumber: number;
 }) {
+  const edgesGeo = useMemo(
+    () => new THREE.EdgesGeometry(new THREE.BoxGeometry(0.38, 0.22, 0.25)),
+    []
+  );
+
   return (
     <group position={position}>
-      {/* Connector housing body */}
       <mesh position={[0, 0.1, 0]}>
         <boxGeometry args={[0.35, 0.2, 0.22]} />
         <meshStandardMaterial color="#222222" roughness={0.4} metalness={0.2} />
       </mesh>
-
-      {/* Metal pins */}
       {[-0.08, 0, 0.08].map((xOff, i) => (
         <mesh key={`pin-${i}`} position={[xOff, 0.0, 0]}>
           <cylinderGeometry args={[0.012, 0.012, 0.1, 8]} />
           <meshStandardMaterial color="#C0C0C0" metalness={0.95} roughness={0.1} />
         </mesh>
       ))}
-
-      {/* Copper pads on PCB */}
       {[-0.08, 0, 0.08].map((xOff, i) => (
         <mesh key={`pad-${i}`} position={[xOff, -0.025, 0]}>
           <cylinderGeometry args={[0.04, 0.04, 0.005, 12]} />
           <meshStandardMaterial color="#d4a84b" metalness={0.9} roughness={0.15} />
         </mesh>
       ))}
-
-      {/* Silkscreen outline */}
       <lineSegments position={[0, 0.1, 0]}>
-        <edgesGeometry args={[new THREE.BoxGeometry(0.38, 0.22, 0.25)]} />
+        <primitive object={edgesGeo} attach="geometry" />
         <lineBasicMaterial color="#ffffff" />
       </lineSegments>
-
-      {/* Channel number label */}
       <Text
         position={[0, 0.28, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
@@ -201,8 +193,6 @@ function ChannelPort({
       >
         {`CH${channelNumber}`}
       </Text>
-
-      {/* Green indicator dot */}
       <mesh position={[0.14, 0.1, 0.08]}>
         <sphereGeometry args={[0.02, 8, 8]} />
         <meshStandardMaterial color="#00ff88" emissive="#00ff88" emissiveIntensity={0.8} />
@@ -210,8 +200,6 @@ function ChannelPort({
     </group>
   );
 }
-
-/* ── Detailed PCB Board ── */
 
 function PCBBoard() {
   const traces: { x: number; z: number; w: number; h: number }[] = [];
@@ -244,6 +232,24 @@ function PCBBoard() {
     [-2.0, 0.5], [1.5, -0.3], [0.3, 0.6], [-1.0, -1.0],
     [0.8, -0.5], [-0.8, 0.3], [1.8, 0.2], [-1.5, -0.2],
   ];
+
+  const boardEdgesGeo = useMemo(
+    () => new THREE.EdgesGeometry(new THREE.BoxGeometry(6.2, 0.001, 4.2)),
+    []
+  );
+
+  const silkDims = [
+    { pos: [-1.5, 0.5], size: [0.5, 0.3] },
+    { pos: [1.0, -0.5], size: [0.4, 0.6] },
+    { pos: [-0.5, -1.0], size: [0.7, 0.3] },
+    { pos: [2.0, 0.5], size: [0.3, 0.3] },
+    { pos: [-2.0, -0.5], size: [0.4, 0.4] },
+  ];
+
+  const silkGeos = useMemo(
+    () => silkDims.map((s) => new THREE.EdgesGeometry(new THREE.BoxGeometry(s.size[0], 0.001, s.size[1]))),
+    []
+  );
 
   return (
     <group>
@@ -296,24 +302,16 @@ function PCBBoard() {
         </group>
       ))}
       <lineSegments position={[0, -0.018, 0]}>
-        <edgesGeometry args={[new THREE.BoxGeometry(6.2, 0.001, 4.2)]} />
+        <primitive object={boardEdgesGeo} attach="geometry" />
         <lineBasicMaterial color="#ffffff" />
       </lineSegments>
-      {[
-        [-1.5, 0.5, 0.5, 0.3],
-        [1.0, -0.5, 0.4, 0.6],
-        [-0.5, -1.0, 0.7, 0.3],
-        [2.0, 0.5, 0.3, 0.3],
-        [-2.0, -0.5, 0.4, 0.4],
-      ].map(([sx, sz, sw, sh], i) => (
-        <lineSegments key={`silk-${i}`} position={[sx, -0.018, sz]}>
-          <edgesGeometry args={[new THREE.BoxGeometry(sw, 0.001, sh)]} />
+      {silkDims.map((s, i) => (
+        <lineSegments key={`silk-${i}`} position={[s.pos[0], -0.018, s.pos[1]]}>
+          <primitive object={silkGeos[i]} attach="geometry" />
           <lineBasicMaterial color="rgba(255,255,255,0.5)" />
         </lineSegments>
       ))}
-      {[
-        [-2.8, -1.8], [-2.8, 1.8], [2.8, -1.8], [2.8, 1.8]
-      ].map(([mx, mz], i) => (
+      {([ [-2.8, -1.8], [-2.8, 1.8], [2.8, -1.8], [2.8, 1.8] ] as [number, number][]).map(([mx, mz], i) => (
         <group key={`mount-${i}`}>
           <mesh position={[mx, -0.025, mz]}>
             <cylinderGeometry args={[0.12, 0.12, 0.01, 16]} />
@@ -328,8 +326,6 @@ function PCBBoard() {
     </group>
   );
 }
-
-/* ── Component Selector ── */
 
 function PCBComponent({
   position,
@@ -352,8 +348,6 @@ function PCBComponent({
     default: return null;
   }
 }
-
-/* ── Main Workspace ── */
 
 export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps) {
   const [droppedItems, setDroppedItems] = useState<DroppedItem[]>(items ?? []);

@@ -4,6 +4,7 @@ const items = [
   { type: "Capacitor", emoji: "🔋" },
   { type: "LED", emoji: "💡" },
   { type: "Transistor", emoji: "🔧" },
+  { type: "Channel Port", emoji: "🔗" },
 ];
 
 export default function Inventory() {

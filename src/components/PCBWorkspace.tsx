@@ -367,8 +367,8 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
     const x = ((e.clientX - rect.left) / rect.width) * 6 - 3;
     const y = ((e.clientY - rect.top) / rect.height) * -4 + 2;
 
-    // Snap to 0.1 unit grid for high precision
-    const gridSize = 0.1;
+    // Snap to 0.01 unit grid for high precision
+    const gridSize = 0.01;
     const snappedX = Math.round(x / gridSize) * gridSize;
     const snappedY = Math.round(y / gridSize) * gridSize;
 

@@ -1,7 +1,7 @@
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Grid, Text } from "@react-three/drei";
 import * as THREE from "three";
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 
 interface DroppedItem {
   type: string;
@@ -351,6 +351,7 @@ function PCBComponent({
 
 export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps) {
   const [droppedItems, setDroppedItems] = useState<DroppedItem[]>(items ?? []);
+  const channelCountRef = useRef(0);
 
   useEffect(() => {
     if (items) {
@@ -371,8 +372,6 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
       return updated;
     });
   }, [onItemsChange]);
-
-  let channelCount = 0;
 
   return (
     <div
@@ -398,18 +397,21 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
           followCamera={false}
           position={[0, -0.12, 0]}
         />
-        {droppedItems.map((item, i) => {
-          const isChannel = item.type === "Channel Port" || item.type === "ChannelPort";
-          if (isChannel) channelCount++;
-          return (
-            <PCBComponent
-              key={i}
-              position={[item.x, -0.03, item.y]}
-              label={item.type}
-              channelNumber={isChannel ? channelCount : undefined}
-            />
-          );
-        })}
+        {(() => {
+          channelCountRef.current = 0;
+          return droppedItems.map((item, i) => {
+            const isChannel = item.type === "Channel Port" || item.type === "ChannelPort";
+            if (isChannel) channelCountRef.current++;
+            return (
+              <PCBComponent
+                key={i}
+                position={[item.x, -0.03, item.y]}
+                label={item.type}
+                channelNumber={isChannel ? channelCountRef.current : undefined}
+              />
+            );
+          });
+        })()}
         <OrbitControls
           enablePan
           enableZoom

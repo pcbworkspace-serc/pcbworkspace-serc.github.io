@@ -1,5 +1,5 @@
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Grid } from "@react-three/drei";
+import { OrbitControls, Grid, Text } from "@react-three/drei";
 import * as THREE from "three";
 import { useState, useCallback, useEffect } from "react";
 
@@ -19,22 +19,10 @@ type PCBWorkspaceProps = {
 function Resistor({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>
-      {/* Body */}
       <mesh position={[0, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.08, 0.08, 0.35, 16]} />
         <meshStandardMaterial color="#d2b48c" roughness={0.6} />
       </mesh>
-      {/* Color bands */}
-      {[[-0.1, "#8B4513"], [-0.04, "#000000"], [0.02, "#ff0000"], [0.08, "#FFD700"]].map(
-        ([offset, color], i) => (
-          <mesh key={i} position={[0, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.085, 0.085, 0.025, 16]} />
-            <meshStandardMaterial color={color as string} />
-            <group position={[0, Number(offset), 0]} />
-          </mesh>
-        )
-      )}
-      {/* Actually position the bands correctly */}
       {[
         { offset: -0.12, color: "#8B4513" },
         { offset: -0.05, color: "#000000" },
@@ -46,7 +34,6 @@ function Resistor({ position }: { position: [number, number, number] }) {
           <meshStandardMaterial color={band.color} />
         </mesh>
       ))}
-      {/* Lead wires */}
       <mesh position={[-0.25, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.012, 0.012, 0.18, 8]} />
         <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
@@ -62,22 +49,18 @@ function Resistor({ position }: { position: [number, number, number] }) {
 function Capacitor({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>
-      {/* Electrolytic capacitor body */}
       <mesh position={[0, 0.18, 0]}>
         <cylinderGeometry args={[0.12, 0.12, 0.3, 20]} />
         <meshStandardMaterial color="#1a1a6e" roughness={0.4} />
       </mesh>
-      {/* Top cap */}
       <mesh position={[0, 0.34, 0]}>
         <cylinderGeometry args={[0.12, 0.11, 0.02, 20]} />
         <meshStandardMaterial color="#888888" metalness={0.8} roughness={0.2} />
       </mesh>
-      {/* K marking stripe */}
       <mesh position={[0.08, 0.18, 0.08]} rotation={[0, -Math.PI / 4, 0]}>
         <boxGeometry args={[0.01, 0.28, 0.1]} />
         <meshStandardMaterial color="#cccccc" />
       </mesh>
-      {/* Lead wires */}
       <mesh position={[-0.04, 0.01, 0]}>
         <cylinderGeometry args={[0.012, 0.012, 0.08, 8]} />
         <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
@@ -93,17 +76,14 @@ function Capacitor({ position }: { position: [number, number, number] }) {
 function Diode({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>
-      {/* Glass body */}
       <mesh position={[0, 0.1, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.05, 0.05, 0.25, 12]} />
         <meshStandardMaterial color="#2a2a2a" roughness={0.3} />
       </mesh>
-      {/* Cathode band */}
       <mesh position={[0.08, 0.1, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.055, 0.055, 0.03, 12]} />
         <meshStandardMaterial color="#C0C0C0" metalness={0.7} roughness={0.3} />
       </mesh>
-      {/* Leads */}
       <mesh position={[-0.2, 0.1, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.012, 0.012, 0.18, 8]} />
         <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
@@ -119,22 +99,18 @@ function Diode({ position }: { position: [number, number, number] }) {
 function LED({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>
-      {/* Dome */}
       <mesh position={[0, 0.22, 0]}>
         <sphereGeometry args={[0.1, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
         <meshStandardMaterial color="#ff2200" transparent opacity={0.7} emissive="#ff2200" emissiveIntensity={0.5} />
       </mesh>
-      {/* Cylinder base */}
       <mesh position={[0, 0.13, 0]}>
         <cylinderGeometry args={[0.1, 0.1, 0.18, 16]} />
         <meshStandardMaterial color="#ff3300" transparent opacity={0.6} emissive="#ff2200" emissiveIntensity={0.3} />
       </mesh>
-      {/* Flat bottom rim */}
       <mesh position={[0, 0.04, 0]}>
         <cylinderGeometry args={[0.12, 0.12, 0.02, 16]} />
         <meshStandardMaterial color="#cccccc" metalness={0.6} roughness={0.3} />
       </mesh>
-      {/* Leads */}
       <mesh position={[-0.03, 0.01, 0]}>
         <cylinderGeometry args={[0.01, 0.01, 0.08, 8]} />
         <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
@@ -143,7 +119,6 @@ function LED({ position }: { position: [number, number, number] }) {
         <cylinderGeometry args={[0.01, 0.01, 0.06, 8]} />
         <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
       </mesh>
-      {/* Point light for glow */}
       <pointLight position={[0, 0.3, 0]} color="#ff2200" intensity={0.3} distance={1} />
     </group>
   );
@@ -152,7 +127,6 @@ function LED({ position }: { position: [number, number, number] }) {
 function Transistor({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>
-      {/* Flat body (TO-92 package) */}
       <mesh position={[0, 0.12, 0]} rotation={[0, 0, 0]}>
         <cylinderGeometry args={[0.1, 0.1, 0.18, 16, 1, false, 0, Math.PI]} />
         <meshStandardMaterial color="#1a1a1a" roughness={0.3} />
@@ -161,12 +135,10 @@ function Transistor({ position }: { position: [number, number, number] }) {
         <boxGeometry args={[0.2, 0.18, 0.02]} />
         <meshStandardMaterial color="#1a1a1a" roughness={0.3} />
       </mesh>
-      {/* Marking text dot */}
       <mesh position={[0, 0.18, 0.06]}>
         <sphereGeometry args={[0.015, 8, 8]} />
         <meshStandardMaterial color="#ffffff" />
       </mesh>
-      {/* 3 Leads */}
       {[-0.05, 0, 0.05].map((xOff, i) => (
         <mesh key={i} position={[xOff, 0.01, 0]}>
           <cylinderGeometry args={[0.01, 0.01, 0.06, 8]} />
@@ -177,20 +149,78 @@ function Transistor({ position }: { position: [number, number, number] }) {
   );
 }
 
+/* ── Channel Port Component ── */
+
+function ChannelPort({
+  position,
+  channelNumber,
+}: {
+  position: [number, number, number];
+  channelNumber: number;
+}) {
+  return (
+    <group position={position}>
+      {/* Connector housing body */}
+      <mesh position={[0, 0.1, 0]}>
+        <boxGeometry args={[0.35, 0.2, 0.22]} />
+        <meshStandardMaterial color="#222222" roughness={0.4} metalness={0.2} />
+      </mesh>
+
+      {/* Metal pins */}
+      {[-0.08, 0, 0.08].map((xOff, i) => (
+        <mesh key={`pin-${i}`} position={[xOff, 0.0, 0]}>
+          <cylinderGeometry args={[0.012, 0.012, 0.1, 8]} />
+          <meshStandardMaterial color="#C0C0C0" metalness={0.95} roughness={0.1} />
+        </mesh>
+      ))}
+
+      {/* Copper pads on PCB */}
+      {[-0.08, 0, 0.08].map((xOff, i) => (
+        <mesh key={`pad-${i}`} position={[xOff, -0.025, 0]}>
+          <cylinderGeometry args={[0.04, 0.04, 0.005, 12]} />
+          <meshStandardMaterial color="#d4a84b" metalness={0.9} roughness={0.15} />
+        </mesh>
+      ))}
+
+      {/* Silkscreen outline */}
+      <lineSegments position={[0, 0.1, 0]}>
+        <edgesGeometry args={[new THREE.BoxGeometry(0.38, 0.22, 0.25)]} />
+        <lineBasicMaterial color="#ffffff" />
+      </lineSegments>
+
+      {/* Channel number label */}
+      <Text
+        position={[0, 0.28, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={0.13}
+        color="#ffffff"
+        anchorX="center"
+        anchorY="middle"
+        outlineWidth={0.01}
+        outlineColor="#000000"
+      >
+        {`CH${channelNumber}`}
+      </Text>
+
+      {/* Green indicator dot */}
+      <mesh position={[0.14, 0.1, 0.08]}>
+        <sphereGeometry args={[0.02, 8, 8]} />
+        <meshStandardMaterial color="#00ff88" emissive="#00ff88" emissiveIntensity={0.8} />
+      </mesh>
+    </group>
+  );
+}
+
 /* ── Detailed PCB Board ── */
 
 function PCBBoard() {
-  // Generate random-looking but deterministic trace paths
   const traces: { x: number; z: number; w: number; h: number }[] = [];
-  // Horizontal main bus traces
   for (let i = 0; i < 7; i++) {
     traces.push({ x: 0, z: -1.4 + i * 0.48, w: 5.6, h: 0.04 });
   }
-  // Vertical main bus traces
   for (let i = 0; i < 11; i++) {
     traces.push({ x: -2.5 + i * 0.5, z: 0, w: 0.04, h: 3.6 });
   }
-  // Diagonal / branching traces
   const branchTraces = [
     { x: -1.8, z: -0.6, w: 0.8, h: 0.03 },
     { x: 1.2, z: 0.8, w: 1.2, h: 0.03 },
@@ -202,7 +232,6 @@ function PCBBoard() {
     { x: -1.0, z: -1.0, w: 0.03, h: 0.6 },
   ];
 
-  // Via positions
   const vias: [number, number][] = [];
   for (let row = 0; row < 7; row++) {
     for (let col = 0; col < 11; col++) {
@@ -210,7 +239,6 @@ function PCBBoard() {
     }
   }
 
-  // Extra via clusters
   const extraVias: [number, number][] = [
     [-1.8, -0.6], [1.2, 0.8], [-0.5, 1.2], [2.0, -1.0],
     [-2.0, 0.5], [1.5, -0.3], [0.3, 0.6], [-1.0, -1.0],
@@ -219,55 +247,42 @@ function PCBBoard() {
 
   return (
     <group>
-      {/* FR-4 substrate base */}
       <mesh position={[0, -0.08, 0]} receiveShadow>
         <boxGeometry args={[6.2, 0.06, 4.2]} />
         <meshStandardMaterial color="#0d4f25" roughness={0.7} />
       </mesh>
-      {/* Solder mask layer (green top) */}
       <mesh position={[0, -0.04, 0]} receiveShadow>
         <boxGeometry args={[6.2, 0.02, 4.2]} />
         <meshStandardMaterial color="#1a8a4a" roughness={0.5} />
       </mesh>
-      {/* Copper ground plane (bottom hint) */}
       <mesh position={[0, -0.11, 0]}>
         <boxGeometry args={[6.0, 0.005, 4.0]} />
         <meshStandardMaterial color="#b87333" metalness={0.8} roughness={0.3} />
       </mesh>
-
-      {/* Main copper traces */}
       {traces.map((t, i) => (
         <mesh key={`trace-${i}`} position={[t.x, -0.028, t.z]}>
           <boxGeometry args={[t.w, 0.005, t.h]} />
           <meshStandardMaterial color="#c87533" metalness={0.85} roughness={0.2} />
         </mesh>
       ))}
-
-      {/* Branch traces */}
       {branchTraces.map((t, i) => (
         <mesh key={`branch-${i}`} position={[t.x, -0.028, t.z]}>
           <boxGeometry args={[t.w, 0.005, t.h]} />
           <meshStandardMaterial color="#d4944a" metalness={0.8} roughness={0.25} />
         </mesh>
       ))}
-
-      {/* Through-hole vias at grid intersections */}
       {vias.map(([vx, vz], i) => (
         <group key={`via-${i}`}>
-          {/* Copper pad */}
           <mesh position={[vx, -0.025, vz]}>
             <cylinderGeometry args={[0.06, 0.06, 0.008, 12]} />
             <meshStandardMaterial color="#d4a84b" metalness={0.9} roughness={0.15} />
           </mesh>
-          {/* Drill hole */}
           <mesh position={[vx, -0.02, vz]}>
             <cylinderGeometry args={[0.025, 0.025, 0.01, 8]} />
             <meshStandardMaterial color="#0a3318" />
           </mesh>
         </group>
       ))}
-
-      {/* Extra vias for detail */}
       {extraVias.map(([vx, vz], i) => (
         <group key={`evia-${i}`}>
           <mesh position={[vx, -0.025, vz]}>
@@ -280,13 +295,10 @@ function PCBBoard() {
           </mesh>
         </group>
       ))}
-
-      {/* Silkscreen outlines */}
       <lineSegments position={[0, -0.018, 0]}>
         <edgesGeometry args={[new THREE.BoxGeometry(6.2, 0.001, 4.2)]} />
         <lineBasicMaterial color="#ffffff" />
       </lineSegments>
-      {/* Silkscreen component outlines */}
       {[
         [-1.5, 0.5, 0.5, 0.3],
         [1.0, -0.5, 0.4, 0.6],
@@ -299,8 +311,6 @@ function PCBBoard() {
           <lineBasicMaterial color="rgba(255,255,255,0.5)" />
         </lineSegments>
       ))}
-
-      {/* Mounting holes in corners */}
       {[
         [-2.8, -1.8], [-2.8, 1.8], [2.8, -1.8], [2.8, 1.8]
       ].map(([mx, mz], i) => (
@@ -321,13 +331,24 @@ function PCBBoard() {
 
 /* ── Component Selector ── */
 
-function PCBComponent({ position, label }: { position: [number, number, number]; label: string }) {
+function PCBComponent({
+  position,
+  label,
+  channelNumber,
+}: {
+  position: [number, number, number];
+  label: string;
+  channelNumber?: number;
+}) {
   switch (label) {
     case "Resistor": return <Resistor position={position} />;
     case "Capacitor": return <Capacitor position={position} />;
     case "Diode": return <Diode position={position} />;
     case "LED": return <LED position={position} />;
     case "Transistor": return <Transistor position={position} />;
+    case "Channel Port":
+    case "ChannelPort":
+      return <ChannelPort position={position} channelNumber={channelNumber ?? 1} />;
     default: return null;
   }
 }
@@ -357,6 +378,8 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
     });
   }, [onItemsChange]);
 
+  let channelCount = 0;
+
   return (
     <div
       className="w-full h-full relative"
@@ -381,13 +404,18 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
           followCamera={false}
           position={[0, -0.12, 0]}
         />
-        {droppedItems.map((item, i) => (
-          <PCBComponent
-            key={i}
-            position={[item.x, -0.03, item.y]}
-            label={item.type}
-          />
-        ))}
+        {droppedItems.map((item, i) => {
+          const isChannel = item.type === "Channel Port" || item.type === "ChannelPort";
+          if (isChannel) channelCount++;
+          return (
+            <PCBComponent
+              key={i}
+              position={[item.x, -0.03, item.y]}
+              label={item.type}
+              channelNumber={isChannel ? channelCount : undefined}
+            />
+          );
+        })}
         <OrbitControls
           enablePan
           enableZoom

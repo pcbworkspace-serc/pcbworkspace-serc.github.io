@@ -366,8 +366,14 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 6 - 3;
     const y = ((e.clientY - rect.top) / rect.height) * -4 + 2;
+
+    // Snap to 0.1 unit grid for high precision
+    const gridSize = 0.1;
+    const snappedX = Math.round(x / gridSize) * gridSize;
+    const snappedY = Math.round(y / gridSize) * gridSize;
+
     setDroppedItems((prev) => {
-      const updated = [...prev, { type, x, y }];
+      const updated = [...prev, { type, x: snappedX, y: snappedY }];
       onItemsChange?.(updated);
       return updated;
     });
@@ -386,11 +392,11 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
         <PCBBoard />
         <Grid
           infiniteGrid
-          cellSize={0.5}
+          cellSize={0.1}
           cellThickness={0.3}
-          cellColor="#005588"
-          sectionSize={2.5}
-          sectionThickness={0.6}
+          cellColor="#004466"
+          sectionSize={0.5}
+          sectionThickness={0.8}
           sectionColor="#0077aa"
           fadeDistance={25}
           fadeStrength={1.5}

@@ -1,5 +1,6 @@
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Grid, Text } from "@react-three/drei";
+import { handleChatInput } from "@/lib/robot";
 import * as THREE from "three";
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 

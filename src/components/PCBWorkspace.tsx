@@ -4,6 +4,8 @@ import * as THREE from "three";
 import { handleChatInput } from "@/lib/robot";
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 
+import miniMeeBg from "@/assets/minimee.png";
+
 interface DroppedItem {
   type: string;
   x: number;
@@ -44,19 +46,11 @@ function Resistor({ position }: { position: [number, number, number] }) {
       ))}
       <mesh position={[-0.25, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.012, 0.012, 0.18, 8]} />
-        <meshStandardMaterial
-          color="#C0C0C0"
-          metalness={0.9}
-          roughness={0.2}
-        />
+        <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
       </mesh>
       <mesh position={[0.25, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.012, 0.012, 0.18, 8]} />
-        <meshStandardMaterial
-          color="#C0C0C0"
-          metalness={0.9}
-          roughness={0.2}
-        />
+        <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
       </mesh>
     </group>
   );
@@ -71,11 +65,7 @@ function Capacitor({ position }: { position: [number, number, number] }) {
       </mesh>
       <mesh position={[0, 0.34, 0]}>
         <cylinderGeometry args={[0.12, 0.11, 0.02, 20]} />
-        <meshStandardMaterial
-          color="#888888"
-          metalness={0.8}
-          roughness={0.2}
-        />
+        <meshStandardMaterial color="#888888" metalness={0.8} roughness={0.2} />
       </mesh>
       <mesh position={[0.08, 0.18, 0.08]} rotation={[0, -Math.PI / 4, 0]}>
         <boxGeometry args={[0.01, 0.28, 0.1]} />
@@ -83,19 +73,11 @@ function Capacitor({ position }: { position: [number, number, number] }) {
       </mesh>
       <mesh position={[-0.04, 0.01, 0]}>
         <cylinderGeometry args={[0.012, 0.012, 0.08, 8]} />
-        <meshStandardMaterial
-          color="#C0C0C0"
-          metalness={0.9}
-          roughness={0.2}
-        />
+        <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
       </mesh>
       <mesh position={[0.04, 0.01, 0]}>
         <cylinderGeometry args={[0.012, 0.012, 0.08, 8]} />
-        <meshStandardMaterial
-          color="#C0C0C0"
-          metalness={0.9}
-          roughness={0.2}
-        />
+        <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
       </mesh>
     </group>
   );
@@ -110,27 +92,15 @@ function Diode({ position }: { position: [number, number, number] }) {
       </mesh>
       <mesh position={[0.08, 0.1, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.055, 0.055, 0.03, 12]} />
-        <meshStandardMaterial
-          color="#C0C0C0"
-          metalness={0.7}
-          roughness={0.3}
-        />
+        <meshStandardMaterial color="#C0C0C0" metalness={0.7} roughness={0.3} />
       </mesh>
       <mesh position={[-0.2, 0.1, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.012, 0.012, 0.18, 8]} />
-        <meshStandardMaterial
-          color="#C0C0C0"
-          metalness={0.9}
-          roughness={0.2}
-        />
+        <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
       </mesh>
       <mesh position={[0.2, 0.1, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.012, 0.012, 0.18, 8]} />
-        <meshStandardMaterial
-          color="#C0C0C0"
-          metalness={0.9}
-          roughness={0.2}
-        />
+        <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
       </mesh>
     </group>
   );
@@ -140,9 +110,7 @@ function LED({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>
       <mesh position={[0, 0.22, 0]}>
-        <sphereGeometry
-          args={[0.1, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]}
-        />
+        <sphereGeometry args={[0.1, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
         <meshStandardMaterial
           color="#ff2200"
           transparent
@@ -163,34 +131,17 @@ function LED({ position }: { position: [number, number, number] }) {
       </mesh>
       <mesh position={[0, 0.04, 0]}>
         <cylinderGeometry args={[0.12, 0.12, 0.02, 16]} />
-        <meshStandardMaterial
-          color="#cccccc"
-          metalness={0.6}
-          roughness={0.3}
-        />
+        <meshStandardMaterial color="#cccccc" metalness={0.6} roughness={0.3} />
       </mesh>
       <mesh position={[-0.03, 0.01, 0]}>
         <cylinderGeometry args={[0.01, 0.01, 0.08, 8]} />
-        <meshStandardMaterial
-          color="#C0C0C0"
-          metalness={0.9}
-          roughness={0.2}
-        />
+        <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
       </mesh>
       <mesh position={[0.03, 0.01, 0]}>
         <cylinderGeometry args={[0.01, 0.01, 0.06, 8]} />
-        <meshStandardMaterial
-          color="#C0C0C0"
-          metalness={0.9}
-          roughness={0.2}
-        />
+        <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
       </mesh>
-      <pointLight
-        position={[0, 0.3, 0]}
-        color="#ff2200"
-        intensity={0.3}
-        distance={1}
-      />
+      <pointLight position={[0, 0.3, 0]} color="#ff2200" intensity={0.3} distance={1} />
     </group>
   );
 }
@@ -199,9 +150,7 @@ function Transistor({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>
       <mesh position={[0, 0.12, 0]} rotation={[0, 0, 0]}>
-        <cylinderGeometry
-          args={[0.1, 0.1, 0.18, 16, 1, false, 0, Math.PI]}
-        />
+        <cylinderGeometry args={[0.1, 0.1, 0.18, 16, 1, false, 0, Math.PI]} />
         <meshStandardMaterial color="#1a1a1a" roughness={0.3} />
       </mesh>
       <mesh position={[0, 0.12, 0]}>
@@ -215,11 +164,7 @@ function Transistor({ position }: { position: [number, number, number] }) {
       {[-0.05, 0, 0.05].map((xOff, i) => (
         <mesh key={i} position={[xOff, 0.01, 0]}>
           <cylinderGeometry args={[0.01, 0.01, 0.06, 8]} />
-          <meshStandardMaterial
-            color="#C0C0C0"
-            metalness={0.9}
-            roughness={0.2}
-          />
+          <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
         </mesh>
       ))}
     </group>
@@ -247,21 +192,13 @@ function ChannelPort({
       {[-0.08, 0, 0.08].map((xOff, i) => (
         <mesh key={`pin-${i}`} position={[xOff, 0.0, 0]}>
           <cylinderGeometry args={[0.012, 0.012, 0.1, 8]} />
-          <meshStandardMaterial
-            color="#C0C0C0"
-            metalness={0.95}
-            roughness={0.1}
-          />
+          <meshStandardMaterial color="#C0C0C0" metalness={0.95} roughness={0.1} />
         </mesh>
       ))}
       {[-0.08, 0, 0.08].map((xOff, i) => (
         <mesh key={`pad-${i}`} position={[xOff, -0.025, 0]}>
           <cylinderGeometry args={[0.04, 0.04, 0.005, 12]} />
-          <meshStandardMaterial
-            color="#d4a84b"
-            metalness={0.9}
-            roughness={0.15}
-          />
+          <meshStandardMaterial color="#d4a84b" metalness={0.9} roughness={0.15} />
         </mesh>
       ))}
       <lineSegments position={[0, 0.1, 0]}>
@@ -282,11 +219,7 @@ function ChannelPort({
       </Text>
       <mesh position={[0.14, 0.1, 0.08]}>
         <sphereGeometry args={[0.02, 8, 8]} />
-        <meshStandardMaterial
-          color="#00ff88"
-          emissive="#00ff88"
-          emissiveIntensity={0.8}
-        />
+        <meshStandardMaterial color="#00ff88" emissive="#00ff88" emissiveIntensity={0.8} />
       </mesh>
     </group>
   );
@@ -294,12 +227,9 @@ function ChannelPort({
 
 function PCBBoard() {
   const traces: { x: number; z: number; w: number; h: number }[] = [];
-  for (let i = 0; i < 7; i++) {
-    traces.push({ x: 0, z: -1.4 + i * 0.48, w: 5.6, h: 0.04 });
-  }
-  for (let i = 0; i < 11; i++) {
-    traces.push({ x: -2.5 + i * 0.5, z: 0, w: 0.04, h: 3.6 });
-  }
+  for (let i = 0; i < 7; i++) traces.push({ x: 0, z: -1.4 + i * 0.48, w: 5.6, h: 0.04 });
+  for (let i = 0; i < 11; i++) traces.push({ x: -2.5 + i * 0.5, z: 0, w: 0.04, h: 3.6 });
+
   const branchTraces = [
     { x: -1.8, z: -0.6, w: 0.8, h: 0.03 },
     { x: 1.2, z: 0.8, w: 1.2, h: 0.03 },
@@ -312,11 +242,8 @@ function PCBBoard() {
   ];
 
   const vias: [number, number][] = [];
-  for (let row = 0; row < 7; row++) {
-    for (let col = 0; col < 11; col++) {
-      vias.push([-2.5 + col * 0.5, -1.4 + row * 0.48]);
-    }
-  }
+  for (let row = 0; row < 7; row++)
+    for (let col = 0; col < 11; col++) vias.push([-2.5 + col * 0.5, -1.4 + row * 0.48]);
 
   const extraVias: [number, number][] = [
     [-1.8, -0.6],
@@ -347,13 +274,7 @@ function PCBBoard() {
   ];
 
   const silkGeos = useMemo(
-    () =>
-      silkDims.map(
-        (s) =>
-          new THREE.EdgesGeometry(
-            new THREE.BoxGeometry(s.size[0], 0.001, s.size[1])
-          )
-      ),
+    () => silkDims.map((s) => new THREE.EdgesGeometry(new THREE.BoxGeometry(s.size[0], 0.001, s.size[1]))),
     []
   );
 
@@ -371,35 +292,25 @@ function PCBBoard() {
         <boxGeometry args={[6.0, 0.005, 4.0]} />
         <meshStandardMaterial color="#b87333" metalness={0.8} roughness={0.3} />
       </mesh>
+
       {traces.map((t, i) => (
         <mesh key={`trace-${i}`} position={[t.x, -0.028, t.z]}>
           <boxGeometry args={[t.w, 0.005, t.h]} />
-          <meshStandardMaterial
-            color="#c87533"
-            metalness={0.85}
-            roughness={0.2}
-          />
+          <meshStandardMaterial color="#c87533" metalness={0.85} roughness={0.2} />
         </mesh>
       ))}
       {branchTraces.map((t, i) => (
         <mesh key={`branch-${i}`} position={[t.x, -0.028, t.z]}>
           <boxGeometry args={[t.w, 0.005, t.h]} />
-          <meshStandardMaterial
-            color="#d4944a"
-            metalness={0.8}
-            roughness={0.25}
-          />
+          <meshStandardMaterial color="#d4944a" metalness={0.8} roughness={0.25} />
         </mesh>
       ))}
+
       {vias.map(([vx, vz], i) => (
         <group key={`via-${i}`}>
           <mesh position={[vx, -0.025, vz]}>
             <cylinderGeometry args={[0.06, 0.06, 0.008, 12]} />
-            <meshStandardMaterial
-              color="#d4a84b"
-              metalness={0.9}
-              roughness={0.15}
-            />
+            <meshStandardMaterial color="#d4a84b" metalness={0.9} roughness={0.15} />
           </mesh>
           <mesh position={[vx, -0.02, vz]}>
             <cylinderGeometry args={[0.025, 0.025, 0.01, 8]} />
@@ -411,11 +322,7 @@ function PCBBoard() {
         <group key={`evia-${i}`}>
           <mesh position={[vx, -0.025, vz]}>
             <cylinderGeometry args={[0.045, 0.045, 0.008, 10]} />
-            <meshStandardMaterial
-              color="#d4a84b"
-              metalness={0.9}
-              roughness={0.15}
-            />
+            <meshStandardMaterial color="#d4a84b" metalness={0.9} roughness={0.15} />
           </mesh>
           <mesh position={[vx, -0.02, vz]}>
             <cylinderGeometry args={[0.02, 0.02, 0.01, 8]} />
@@ -423,32 +330,24 @@ function PCBBoard() {
           </mesh>
         </group>
       ))}
+
       <lineSegments position={[0, -0.018, 0]}>
         <primitive object={boardEdgesGeo} attach="geometry" />
         <lineBasicMaterial color="#ffffff" />
       </lineSegments>
+
       {silkDims.map((s, i) => (
         <lineSegments key={`silk-${i}`} position={[s.pos[0], -0.018, s.pos[1]]}>
           <primitive object={silkGeos[i]} attach="geometry" />
           <lineBasicMaterial color="rgba(255,255,255,0.5)" />
         </lineSegments>
       ))}
-      {(
-        [
-          [-2.8, -1.8],
-          [-2.8, 1.8],
-          [2.8, -1.8],
-          [2.8, 1.8],
-        ] as [number, number][]
-      ).map(([mx, mz], i) => (
+
+      {([[-2.8, -1.8], [-2.8, 1.8], [2.8, -1.8], [2.8, 1.8]] as [number, number][]).map(([mx, mz], i) => (
         <group key={`mount-${i}`}>
           <mesh position={[mx, -0.025, mz]}>
             <cylinderGeometry args={[0.12, 0.12, 0.01, 16]} />
-            <meshStandardMaterial
-              color="#c0c0c0"
-              metalness={0.9}
-              roughness={0.1}
-            />
+            <meshStandardMaterial color="#c0c0c0" metalness={0.9} roughness={0.1} />
           </mesh>
           <mesh position={[mx, -0.02, mz]}>
             <cylinderGeometry args={[0.06, 0.06, 0.015, 12]} />
@@ -482,12 +381,7 @@ function PCBComponent({
       return <Transistor position={position} />;
     case "Channel Port":
     case "ChannelPort":
-      return (
-        <ChannelPort
-          position={position}
-          channelNumber={channelNumber ?? 1}
-        />
-      );
+      return <ChannelPort position={position} channelNumber={channelNumber ?? 1} />;
     default:
       return null;
   }
@@ -497,22 +391,18 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
   const [droppedItems, setDroppedItems] = useState<DroppedItem[]>(items ?? []);
   const channelCountRef = useRef(0);
 
-  // --- Robot Chat UI ---
-  const [chatOpen, setChatOpen] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      content:
-        "Robot ready. Try: 'Place R1' (requires Flask server on 127.0.0.1:5000).",
+      content: "Hi! I’m MiniMEE. Try: “Place R1”. (Requires Flask server on 127.0.0.1:5000)",
     },
   ]);
 
   useEffect(() => {
-    if (items) {
-      setDroppedItems(items);
-    }
+    if (items) setDroppedItems(items);
   }, [items]);
 
   const handleDrop = useCallback(
@@ -524,7 +414,6 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
       const x = ((e.clientX - rect.left) / rect.width) * 6 - 3;
       const y = ((e.clientY - rect.top) / rect.height) * -4 + 2;
 
-      // Snap to 0.1 unit grid for high precision
       const gridSize = 0.1;
       const snappedX = Math.round(x / gridSize) * gridSize;
       const snappedY = Math.round(y / gridSize) * gridSize;
@@ -551,21 +440,14 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
       setChatMessages((prev) => [...prev, { role: "assistant", content: reply }]);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setChatMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `Error: ${message}` },
-      ]);
+      setChatMessages((prev) => [...prev, { role: "assistant", content: `Error: ${message}` }]);
     } finally {
       setChatBusy(false);
     }
   }, [chatInput, chatBusy]);
 
   return (
-    <div
-      className="w-full h-full relative"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={handleDrop}
-    >
+    <div className="w-full h-full relative" onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
       <Canvas camera={{ position: [4, 5, 4], fov: 50 }} shadows>
         <ambientLight intensity={0.5} />
         <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow />
@@ -587,8 +469,7 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
         {(() => {
           channelCountRef.current = 0;
           return droppedItems.map((item, i) => {
-            const isChannel =
-              item.type === "Channel Port" || item.type === "ChannelPort";
+            const isChannel = item.type === "Channel Port" || item.type === "ChannelPort";
             if (isChannel) channelCountRef.current++;
             return (
               <PCBComponent
@@ -600,57 +481,85 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
             );
           });
         })()}
-        <OrbitControls
-          enablePan
-          enableZoom
-          enableRotate
-          maxPolarAngle={Math.PI / 2.1}
-          minDistance={2}
-          maxDistance={15}
-        />
+        <OrbitControls enablePan enableZoom enableRotate maxPolarAngle={Math.PI / 2.1} minDistance={2} maxDistance={15} />
       </Canvas>
 
-      {/* Robot Chat overlay */}
       <button
         type="button"
         onClick={() => setChatOpen((v) => !v)}
-        className="absolute top-3 right-3 z-50 bg-black/70 text-white px-3 py-2 rounded"
+        className="absolute top-3 right-3 z-[9999] rounded-md px-4 py-2 font-semibold
+                   border border-cyan-300/30 text-cyan-50
+                   bg-gradient-to-b from-[#0b2a46]/90 to-[#06182b]/90
+                   shadow-[0_8px_20px_rgba(0,0,0,0.35)]
+                   hover:border-cyan-200/50 hover:text-white"
       >
-        {chatOpen ? "Hide Robot" : "Show Robot"}
+        {chatOpen ? "Close MiniMEE" : "Ask MiniMEE"}
       </button>
 
       {chatOpen && (
-        <div className="absolute top-14 right-3 z-50 w-[360px] max-w-[90vw] h-[520px] max-h-[75vh] bg-black/70 text-white rounded border border-white/10 backdrop-blur flex flex-col">
-          <div className="px-3 py-2 border-b border-white/10 font-semibold">
-            PCB Robot
+        <div
+          className="absolute top-14 right-3 z-[9999] w-[360px] max-w-[90vw] h-[520px] max-h-[75vh]
+                     rounded-xl border border-cyan-300/30
+                     bg-gradient-to-b from-[#071a2e] to-[#04101f]
+                     shadow-[0_12px_28px_rgba(0,0,0,0.55)]
+                     flex flex-col overflow-hidden"
+          style={{
+            backgroundImage: `linear-gradient(to bottom, rgba(7,26,46,0.55), rgba(4,16,31,0.65)), url(${miniMeeBg})`,
+            backgroundSize: "contain",
+            backgroundPosition: "center 75%",
+            backgroundRepeat: "no-repeat",
+          }}
+        >
+          <div className="px-4 py-3 border-b border-cyan-200/15 flex items-center justify-between">
+            <div className="font-bold tracking-wide text-cyan-50">
+              Mini<span className="text-cyan-300">MEE</span>
+            </div>
+            <div className="text-xs text-cyan-100/75">Robot Assistant</div>
           </div>
 
-          <div className="flex-1 overflow-auto p-3 space-y-2 text-sm">
-            {chatMessages.map((m, idx) => (
-              <div key={idx} className={m.role === "user" ? "text-right" : "text-left"}>
-                <div className="inline-block px-2 py-1 rounded bg-white/10">
-                  <span className="opacity-70 mr-2">{m.role}:</span>
-                  <span>{m.content}</span>
+          <div className="flex-1 overflow-auto p-4 space-y-3 text-sm">
+            {chatMessages.map((m, idx) => {
+              const isUser = m.role === "user";
+              return (
+                <div key={idx} className={isUser ? "text-right" : "text-left"}>
+                  <div
+                    className={[
+                      "inline-block max-w-[90%] px-3 py-2 rounded-lg",
+                      "border",
+                      isUser
+                        ? "bg-cyan-500/15 border-cyan-300/25 text-cyan-50"
+                        : "bg-black/25 border-white/10 text-white",
+                    ].join(" ")}
+                  >
+                    <div className="text-[11px] mb-1 opacity-75">{isUser ? "you" : "MiniMEE"}</div>
+                    <div className="whitespace-pre-wrap">{m.content}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          <div className="p-3 border-t border-white/10 flex gap-2">
+          <div className="p-3 border-t border-cyan-200/15 flex gap-2">
             <input
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") submitChat();
               }}
-              className="flex-1 rounded px-2 py-2 text-black"
-              placeholder='Type: "Place R1"'
+              className="flex-1 rounded-md px-3 py-2 text-sm
+                         bg-[#e8f3ff] text-[#001524]
+                         border border-cyan-700/30
+                         focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
+              placeholder='Try: "Place R1"'
               disabled={chatBusy}
             />
             <button
               type="button"
               onClick={submitChat}
-              className="px-3 py-2 rounded bg-emerald-500 text-black font-semibold disabled:opacity-50"
+              className="px-4 py-2 rounded-md font-semibold text-sm
+                         bg-cyan-300 text-[#001524]
+                         border border-cyan-200/30
+                         hover:bg-cyan-200 disabled:opacity-50"
               disabled={chatBusy || !chatInput.trim()}
             >
               {chatBusy ? "..." : "Send"}

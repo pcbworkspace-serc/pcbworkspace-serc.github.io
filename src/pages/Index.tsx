@@ -96,10 +96,11 @@ function JEPAVisionPanel() {
     <div className="panel-border panel-bg rounded-lg p-3 w-[260px] flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2"><h3 className="text-primary font-bold text-sm">JEPA Vision</h3><button type="button" onClick={()=>setShowDemo(true)} className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-400/20 text-cyan-400 hover:bg-cyan-500/20 transition-colors">Demo</button></div>
-        {showDemo && <JEPADemo onClose={()=>setShowDemo(false)} />}`n      <span className={["w-2 h-2 rounded-full", online ? "bg-emerald-400" : "bg-red-500"].join(" ")} />
+        {showDemo && <JEPADemo onClose={()=>setShowDemo(false)} />}
+        <span className={["w-2 h-2 rounded-full", online ? "bg-emerald-400" : "bg-red-500"].join(" ")} />
       </div>
       <p className={["text-[10px]", online ? "text-emerald-400" : "text-red-400"].join(" ")}>
-        {online ? `${status?.phase ?? "ready"} · ${status?.parameters ? (status.parameters / 1e6).toFixed(1) + "M params" : ""}` : "Offline — run flask_server.py"}
+        {online ? `${status?.phase ?? "ready"} Â· ${status?.parameters ? (status.parameters / 1e6).toFixed(1) + "M params" : ""}` : "Offline â€” run flask_server.py"}
       </p>
       <div className="bg-black/30 rounded p-2">
         <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Alignment</p>

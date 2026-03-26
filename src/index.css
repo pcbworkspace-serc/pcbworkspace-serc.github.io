@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 80% 10%;
+    --foreground: 200 100% 95%;
+
+    --card: 220 70% 15%;
+    --card-foreground: 200 100% 95%;
+
+    --popover: 220 70% 15%;
+    --popover-foreground: 200 100% 95%;
+
+    --primary: 200 100% 50%;
+    --primary-foreground: 220 80% 10%;
+
+    --secondary: 220 60% 20%;
+    --secondary-foreground: 200 100% 90%;
+
+    --muted: 220 50% 18%;
+    --muted-foreground: 200 30% 60%;
+
+    --accent: 195 100% 45%;
+    --accent-foreground: 220 80% 5%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 200 100% 50%;
+    --input: 220 50% 25%;
+    --ring: 200 100% 50%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 220 70% 12%;
+    --sidebar-foreground: 200 100% 90%;
+    --sidebar-primary: 200 100% 50%;
+    --sidebar-primary-foreground: 220 80% 5%;
+    --sidebar-accent: 220 60% 18%;
+    --sidebar-accent-foreground: 200 100% 90%;
+    --sidebar-border: 200 80% 30%;
+    --sidebar-ring: 200 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    margin: 0;
+    overflow: hidden;
+    background: linear-gradient(to top, hsl(240, 100%, 27%), hsl(195, 100%, 50%));
+    min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  .panel-border {
+    border: 2px solid hsl(var(--primary));
+  }
+  .panel-bg {
+    background-color: hsla(220, 70%, 15%, 0.85);
+  }
+}
+
+/* Hide scrollbars */
+::-webkit-scrollbar { display: none; }
+* { scrollbar-width: none; -ms-overflow-style: none; }

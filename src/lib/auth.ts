@@ -28,6 +28,26 @@ const LEGACY_RECENTS_KEY = "pcbworkspace.recentFiles.v1";
 
 const SUPPORT_EMAIL = "spaceroboticscreations@outlook.com";
 
+// ─── Pre-approved colleagues ───────────────────────────────────────────────
+// These users can log in directly without needing an access code.
+const PRE_APPROVED_USERS: StoredUser[] = [
+  { email: "ramallis@grinnell.edu", password: "sercdevelopers" },
+  { email: "jsantosuosso@vt.edu", password: "sercdevelopers" },
+  { email: "krishna32123@vt.edu", password: "sercdevelopers" },
+  { email: "bww25@vt.edu", password: "sercdevelopers" },
+  { email: "njijun24@vt.edu", password: "sercdevelopers" },
+  { email: "hassan65@purdue.edu", password: "sercdevelopers" },
+  { email: "okinealb@grinnell.edu", password: "sercdevelopers" },
+  { email: "youssefchebil@vt.edu", password: "sercdevelopers" },
+  { email: "liuhongf@grinnell.edu", password: "sercdevelopers" },
+  { email: "gunjansiddharth03@gmail.com", password: "sercdevelopers" },
+  { email: "arhanghosh30@gmail.com", password: "sercdevelopers" },
+  { email: "moksh191@tamu.edu", password: "sercdevelopers" },
+  { email: "k.orosheva1@gmail.com", password: "sercdevelopers" },
+  { email: "dmisi98@gmail.com", password: "sercdevelopers" },
+];
+// ──────────────────────────────────────────────────────────────────────────
+
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
@@ -88,6 +108,12 @@ function migrateLegacyData(email: string) {
   }
 }
 
+function isPreApprovedUser(email: string): StoredUser | undefined {
+  return PRE_APPROVED_USERS.find(
+    (u) => normalizeEmail(u.email) === email,
+  );
+}
+
 export async function authenticate(emailInput: string, password: string, accessCodeInput?: string): Promise<AuthResult> {
   const email = normalizeEmail(emailInput);
   if (!email || !email.includes("@")) {
@@ -102,6 +128,21 @@ export async function authenticate(emailInput: string, password: string, accessC
   const existingUser = users.find((user) => normalizeEmail(user.email) === email);
 
   if (!existingUser) {
+    // Check if this is a pre-approved colleague
+    const preApproved = isPreApprovedUser(email);
+    if (preApproved) {
+      if (preApproved.password !== password) {
+        return { ok: false, error: "Incorrect password for this email." };
+      }
+      // Auto-register them without needing an access code
+      const nextUsers = [...users, { email, password }];
+      writeUsers(nextUsers);
+      localStorage.setItem(SESSION_KEY, email);
+      migrateLegacyData(email);
+      return { ok: true, mode: "register", email };
+    }
+
+    // Not pre-approved — require access code as before
     const accessCode = (accessCodeInput ?? "").trim();
     if (!accessCode) {
       return {

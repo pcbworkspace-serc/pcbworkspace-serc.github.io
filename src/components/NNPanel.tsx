@@ -21,7 +21,7 @@ export default function NNPanel() {
 
   return (
     <>
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300]">
+      <div className="fixed bottom-6 left-6 z-[300]">
         <button onClick={() => setOpen(true)} className="rounded-full px-5 py-2.5 text-[10px] font-black border border-[#00a3ff]/40 bg-[#00a3ff] text-black hover:bg-[#00a3ff]/90 shadow-2xl transition-all uppercase tracking-widest">
           Run Alignment
         </button>

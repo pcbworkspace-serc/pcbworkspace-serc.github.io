@@ -23,7 +23,7 @@ export default function NNPanel() {
     <>
       <div className="fixed bottom-6 right-6 z-[300]">
         <button onClick={() => setOpen(true)} className="rounded-full px-5 py-2.5 text-[10px] font-black border border-[#00a3ff]/40 bg-[#00a3ff] text-black hover:bg-[#00a3ff]/90 shadow-2xl transition-all uppercase tracking-widest">
-          Ask Layla
+          Run Alignment
         </button>
       </div>
 

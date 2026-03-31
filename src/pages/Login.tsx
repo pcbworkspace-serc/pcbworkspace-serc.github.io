@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+﻿import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authenticate, getCurrentUserEmail } from "@/lib/auth";
 
@@ -7,7 +7,6 @@ export default function Login() {
   const currentUserEmail = getCurrentUserEmail();
   const [email, setEmail] = useState(currentUserEmail ?? "");
   const [password, setPassword] = useState("");
-  const [accessCode, setAccessCode] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -16,7 +15,7 @@ export default function Login() {
     setError("");
     setIsSubmitting(true);
 
-    const result = await authenticate(email, password, accessCode);
+    const result = await authenticate(email, password);
     if (!result.ok) {
       setError(result.error);
       setIsSubmitting(false);
@@ -34,7 +33,7 @@ export default function Login() {
         </div>
         <h1 className="text-2xl font-bold text-foreground">Mini MEE Login</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Sign in with your email. New accounts require a one-time access code from spaceroboticscreations@outlook.com.
+          Sign in with your SERC email and password.
         </p>
         {currentUserEmail ? (
           <p className="mt-1 text-xs text-muted-foreground">Currently signed in as {currentUserEmail}. You can switch accounts below.</p>
@@ -70,21 +69,6 @@ export default function Login() {
               onChange={(event) => setPassword(event.target.value)}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
               placeholder="Enter your password"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="accessCode" className="block text-sm font-medium text-foreground mb-1">
-              One-Time Access Code (new accounts only)
-            </label>
-            <input
-              id="accessCode"
-              type="text"
-              autoComplete="off"
-              value={accessCode}
-              onChange={(event) => setAccessCode(event.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Enter code from spaceroboticscreations@outlook.com"
             />
           </div>
 

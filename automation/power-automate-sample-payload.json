@@ -1,0 +1,6 @@
+{
+  "to": "buyer@example.com",
+  "subject": "Welcome to PCB Workspace Access — SERC",
+  "text": "Hi buyer@example.com,\n\nWelcome to PCB Workspace Access from SERC (Space Robotics Creations)!\nWe’re excited to have you onboard.\n\nYour account is now active and you can start using the software right away.\nGetting started video (same as PCB Workspace Access): https://YOUR_VIDEO_LINK\n\nIf you need support, contact us at spaceroboticscreations@outlook.com.\n\n— SERC Team",
+  "html": "<div style=\"font-family: Arial, sans-serif; line-height: 1.5; color: #111827;\"><p>Hi buyer@example.com,</p><p><strong>Welcome to PCB Workspace Access</strong> from <strong>SERC (Space Robotics Creations)</strong>!<br/>We’re excited to have you onboard.</p><p>Your account is now active and you can start using the software right away.</p><p><strong>Getting started video (same as PCB Workspace Access):</strong><br/><a href=\"https://YOUR_VIDEO_LINK\" target=\"_blank\" rel=\"noopener noreferrer\">https://YOUR_VIDEO_LINK</a></p><p>If you need support, contact us at <a href=\"mailto:spaceroboticscreations@outlook.com\">spaceroboticscreations@outlook.com</a>.</p><p>— SERC Team</p></div>"
+}

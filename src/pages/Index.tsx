@@ -1,61 +1,135 @@
-﻿import PCBWorkspace from "@/components/PCBWorkspace";
+import PCBWorkspace from "@/components/PCBWorkspace";
 import Inventory from "@/components/Inventory";
 import CameraFeed from "@/components/CameraFeed";
 import SavedFiles from "@/components/SavedFiles";
 import JEPADemo from "@/components/JEPADemo";
 import NNPanel from "@/components/NNPanel";
 import PCBRobot from "@/components/PCBRobot";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { clearSession, getCurrentUserEmail } from "@/lib/auth";
+import { clearSession, getCurrentUserEmail, getRecentsKey, getSavedProjectsKey } from "@/lib/auth";
+
+type BoardItem = { type: string; x: number; y: number };
+type RecentFile = { name: string; openedAt: number };
+type SavedProject = { id: string; name: string; lastOpened: number; snapshot?: { schemaVersion?: number; savedAt: string; note: string; projectId: string; projectName: string; recentFiles: RecentFile[]; boardItems?: BoardItem[]; }; };
+
+const MAX_RECENTS = 6;
+const MAX_SAVED_PROJECTS = 20;
+
+function getSavedProjectsKey2(email: string) { return `pcbworkspace.savedProjects.v2:${email.trim().toLowerCase()}`; }
+function getRecentsKey2(email: string) { return `pcbworkspace.recentFiles.v2:${email.trim().toLowerCase()}`; }
+
+function loadRecents(email: string): RecentFile[] {
+  try { const raw = localStorage.getItem(getRecentsKey2(email)); if (!raw) return []; const p = JSON.parse(raw); if (!Array.isArray(p)) return []; return p.filter((x: any) => x?.name && x?.openedAt).sort((a: any,b: any)=>b.openedAt-a.openedAt).slice(0,MAX_RECENTS); } catch { return []; }
+}
+function loadSavedProjects(email: string): SavedProject[] {
+  try { const raw = localStorage.getItem(getSavedProjectsKey2(email)); if (!raw) return []; const p = JSON.parse(raw); if (!Array.isArray(p)) return []; return p.sort((a: any,b: any)=>b.lastOpened-a.lastOpened); } catch { return []; }
+}
+function saveProjects(email: string, projects: SavedProject[]) {
+  localStorage.setItem(getSavedProjectsKey2(email), JSON.stringify(projects.slice(0,MAX_SAVED_PROJECTS)));
+  window.dispatchEvent(new Event("saved-projects-updated"));
+}
+function downloadJson(filename: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:"application/json"}); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+function parseBoardItems(value: unknown): BoardItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item: any) => item?.type && typeof item.x==="number" && typeof item.y==="number");
+}
 
 const Index = () => {
-  const [boardItems, setBoardItems] = useState<any[]>([]);
+  const [boardItems, setBoardItems] = useState<BoardItem[]>([]);
   const [showDemo, setShowDemo] = useState(false);
   const [showRobot, setShowRobot] = useState(true);
   const navigate = useNavigate();
-  const email = getCurrentUserEmail();
+  const email = getCurrentUserEmail() ?? "";
+
+  const handleSaveProject = () => {
+    const timestamp = Date.now();
+    const defaultName = `pcb-project-${new Date(timestamp).toISOString().replace(/[:.]/g,"-")}`;
+    const providedName = window.prompt("Enter file name", defaultName);
+    if (providedName === null) return;
+    const projectName = providedName.trim() || defaultName;
+    const updatedRecents = [{name:`${projectName}.json`,openedAt:timestamp},...loadRecents(email)].slice(0,MAX_RECENTS);
+    localStorage.setItem(getRecentsKey2(email), JSON.stringify(updatedRecents));
+    const snapshot = {schemaVersion:2,savedAt:new Date().toISOString(),note:"PCB workspace state",projectId:String(timestamp),projectName,recentFiles:updatedRecents,boardItems};
+    const existing = loadSavedProjects(email);
+    saveProjects(email,[{id:String(timestamp),name:projectName,lastOpened:timestamp,snapshot},...existing.filter(p=>p.id!==String(timestamp))]);
+    downloadJson(projectName.endsWith(".json")?projectName:`${projectName}.json`,snapshot);
+  };
+
+  const handleImport = () => {
+    const input = document.createElement("input"); input.type="file"; input.accept=".json,application/json";
+    input.onchange = () => {
+      const file = input.files?.[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(String(reader.result??"{}")) as any;
+          const timestamp = Date.now();
+          const importedName = parsed.projectName ?? file.name.replace(/\.json$/i,"") ?? "Imported";
+          const importedId = parsed.projectId ?? `${importedName}-${timestamp}`;
+          const snapshot = {schemaVersion:2,savedAt:parsed.savedAt??new Date(timestamp).toISOString(),note:"Imported",projectId:importedId,projectName:importedName,recentFiles:[],boardItems:parseBoardItems(parsed.boardItems)};
+          saveProjects(email,[{id:importedId,name:importedName,lastOpened:timestamp,snapshot},...loadSavedProjects(email).filter(p=>p.id!==importedId)]);
+          setBoardItems(snapshot.boardItems);
+          alert(`Imported: ${importedName}`);
+        } catch { alert("Could not import this JSON file."); }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
+  const handleExport = () => {
+    downloadJson(`pcbworkspace-backup-${Date.now()}.json`,{exportedAt:new Date().toISOString(),schemaVersion:1,savedProjects:loadSavedProjects(email),recentFiles:loadRecents(email)});
+  };
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden relative">
+    <div className="h-screen w-screen flex overflow-hidden relative bg-black">
       {showDemo && <JEPADemo onClose={() => setShowDemo(false)} />}
 
       {/* Top nav bar */}
-      <div className="absolute top-0 right-0 z-50 flex items-center gap-2 px-4 py-2">
-        <span className="text-xs text-primary/90 max-w-[200px] truncate">{email ?? ""}</span>
-        <button type="button" onClick={() => navigate("/login", { replace: true })} className="text-xs rounded border border-primary/40 px-2 py-1 text-primary hover:bg-primary/10 transition-colors">Switch Account</button>
-        <button type="button" onClick={() => { clearSession(); navigate("/login", { replace: true }); }} className="text-xs rounded border border-primary/40 px-2 py-1 text-primary hover:bg-primary/10 transition-colors">Logout</button>
-        <a href="https://spaceroboticscreations.com/" target="_blank" rel="noopener noreferrer" className="text-primary text-xs font-bold opacity-70 hover:opacity-100 transition-opacity">SERC ↗</a>
-        <button type="button" onClick={() => setShowRobot(v => !v)} className="text-xs rounded border border-primary/40 px-3 py-1 text-primary hover:bg-primary/10 transition-colors font-semibold">{showRobot ? "Hide Robot" : "Show Robot"}</button>
+      <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-end gap-2 px-4 py-2 bg-black/60 border-b border-white/5">
+        <span className="text-xs font-semibold text-white mr-2">{email}</span>
+        <button type="button" onClick={() => navigate("/login", { replace: true })} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Switch Account</button>
+        <button type="button" onClick={() => { clearSession(); navigate("/login", { replace: true }); }} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Logout</button>
+        <a href="https://spaceroboticscreations.com/" target="_blank" rel="noopener noreferrer" className="text-[#00d4ff] text-xs font-bold opacity-70 hover:opacity-100 transition-opacity">SERC ↗</a>
+        <button type="button" onClick={() => setShowRobot(v => !v)} className="text-xs rounded-full border border-[#00d4ff]/60 px-3 py-1 text-[#00d4ff] hover:bg-[#00d4ff]/10 transition-colors font-semibold flex items-center gap-1.5">{showRobot ? "Hide Layla" : "Ask Layla"}</button>
       </div>
 
       {/* Left sidebar — blue */}
-      <div className="w-[240px] shrink-0 flex flex-col gap-4 p-4 pt-3" style={{background:"linear-gradient(to bottom, hsl(195,100%,50%), hsl(210,100%,40%))"}}>
-        <div className="flex items-center gap-3 mt-1">
-          <img src="/serc-robot-transparent.png" alt="SERC Robot" className="h-20 w-20 object-contain drop-shadow-lg" />
+      <div className="w-[230px] shrink-0 flex flex-col gap-3 p-3 pt-12" style={{background:"linear-gradient(to bottom, hsl(195,100%,50%), hsl(210,100%,40%))"}}>
+        {/* Logo — larger robot, thinner font */}
+        <div className="flex items-center gap-2 mt-1">
+          <img src="/serc-robot-transparent.png" alt="SERC Robot" className="h-28 w-28 object-contain drop-shadow-lg" />
           <div>
-            <h1 className="font-black text-2xl text-black leading-tight">Mini MEE</h1>
-            <p className="text-[11px] font-bold text-black/70">Be My Engineer!</p>
+            <h1 className="text-3xl text-black leading-tight tracking-tight">Mini MEE</h1>
+            <p className="text-[11px] font-semibold text-black/70">Be My Engineer!</p>
           </div>
         </div>
+
         <div className="flex flex-col gap-3 flex-1 overflow-y-auto">
           <CameraFeed />
+
+          {/* JEPA Vision box */}
           <div className="bg-black/20 rounded-xl p-3 border border-black/10">
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-black font-black text-[10px] uppercase tracking-widest">JEPA Vision</h3>
               <span className="text-[8px] bg-black text-[#00a3ff] px-1.5 py-0.5 rounded font-black">LIVE</span>
             </div>
             <NNPanel />
-            <button type="button" onClick={() => setShowDemo(true)} className="mt-2 w-full py-1.5 bg-black text-[#00a3ff] text-[10px] font-black rounded uppercase tracking-widest hover:bg-black/80 transition-colors">Open Demo</button>
+            <button type="button" onClick={() => setShowDemo(true)} className="mt-2 w-full py-2 bg-black text-[#00a3ff] text-[10px] font-black rounded uppercase tracking-widest hover:bg-black/80 transition-colors">Open Demo</button>
           </div>
+
           <Inventory />
         </div>
+
         <div className="bg-black text-white text-[10px] font-black px-3 py-2 rounded border border-white/10 uppercase tracking-widest text-center">Educational Version</div>
       </div>
 
       {/* Center — PCB board */}
       <div className="flex-1 flex flex-col min-w-0 pt-10">
-        <div className="flex-1 p-3 pt-1">
+        <div className="flex-1 p-3 pt-1 min-h-0">
           <div className="h-full rounded-xl border border-primary/30 overflow-hidden flex flex-col" style={{backgroundColor:"hsla(220,70%,10%,0.9)"}}>
             <div className="text-center py-1.5 border-b border-primary/20">
               <span className="text-primary font-black text-[11px] tracking-widest uppercase">PCB Workspace</span>
@@ -65,17 +139,22 @@ const Index = () => {
             </div>
           </div>
         </div>
-        {/* Bottom buttons */}
-        <div className="flex gap-2 px-3 pb-3 justify-end">
-          <SavedFiles onOpenProject={() => {}} />
-          <button type="button" className="h-12 px-4 rounded-md border border-white/25 bg-white/5 hover:bg-white/10 transition-colors text-[11px] font-semibold text-white/90">Export</button>
-          <button type="button" className="h-12 px-4 rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 transition-colors text-[11px] font-semibold text-primary">Save Project</button>
+
+        {/* Bottom buttons — Export, Import, Save, Saved Files */}
+        <div className="flex gap-2 px-3 pb-3 justify-end items-center">
+          <SavedFiles onOpenProject={(projectId) => {
+            const project = loadSavedProjects(email).find(p => p.id === projectId);
+            if (project?.snapshot?.boardItems) setBoardItems(parseBoardItems(project.snapshot.boardItems));
+          }} />
+          <button type="button" onClick={handleExport} className="h-10 px-4 rounded-md border border-white/25 bg-white/5 hover:bg-white/10 transition-colors text-[11px] font-semibold text-white/90">Export</button>
+          <button type="button" onClick={handleImport} className="h-10 px-4 rounded-md border border-white/25 bg-white/5 hover:bg-white/10 transition-colors text-[11px] font-semibold text-white/90">Import</button>
+          <button type="button" onClick={handleSaveProject} className="h-10 px-4 rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 transition-colors text-[11px] font-semibold text-primary">Save Project</button>
         </div>
       </div>
 
-      {/* Right — PCB Robot chat panel */}
+      {/* Right — PCB Robot chat panel (narrower) */}
       {showRobot && (
-        <div className="w-[320px] shrink-0 flex flex-col pt-10 border-l border-primary/20" style={{backgroundColor:"hsla(220,70%,8%,0.97)"}}>
+        <div className="w-[280px] shrink-0 flex flex-col pt-10 border-l border-primary/20" style={{backgroundColor:"hsla(220,70%,8%,0.97)"}}>
           <PCBRobot />
         </div>
       )}

@@ -1,0 +1,48 @@
+{
+  "type": "object",
+  "required": ["event_type", "resource"],
+  "properties": {
+    "event_type": {
+      "type": "string"
+    },
+    "resource": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "object",
+          "properties": {
+            "value": { "type": "string" },
+            "currency_code": { "type": "string" }
+          }
+        },
+        "payer": {
+          "type": "object",
+          "properties": {
+            "email_address": { "type": "string" },
+            "name": {
+              "type": "object",
+              "properties": {
+                "given_name": { "type": "string" },
+                "surname": { "type": "string" }
+              }
+            }
+          }
+        },
+        "supplementary_data": {
+          "type": "object",
+          "properties": {
+            "related_ids": {
+              "type": "object",
+              "properties": {
+                "order_id": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

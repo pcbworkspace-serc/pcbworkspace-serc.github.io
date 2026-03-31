@@ -124,7 +124,7 @@ const Index = () => {
           <Inventory />
         </div>
 
-        <div className="bg-black text-white text-[10px] font-black px-3 py-2 rounded border border-white/10 uppercase tracking-widest text-center">Educational Version</div>
+
       </div>
 
       {/* Center — PCB board */}

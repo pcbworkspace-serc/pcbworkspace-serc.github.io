@@ -1,57 +1,25 @@
-import { consumeAccessCode, isLicenseBackendConfigured } from "@/lib/license";
-import { sendWelcomeEmail } from "@/lib/welcomeEmail";
+﻿import { createClient } from "@supabase/supabase-js";
 
-type StoredUser = {
-  email: string;
-  password: string;
-};
-
-type AuthSuccess = {
-  ok: true;
-  mode: "login" | "register";
-  email: string;
-};
-
-type AuthFailure = {
-  ok: false;
-  error: string;
-};
-
-export type AuthResult = AuthSuccess | AuthFailure;
-
-const USERS_KEY = "pcbworkspace.users.v1";
+const SUPPORT_EMAIL = "spaceroboticscreations@outlook.com";
 const SESSION_KEY = "pcbworkspace.session.v1";
 const SAVED_PROJECTS_PREFIX = "pcbworkspace.savedProjects.v2";
 const RECENTS_PREFIX = "pcbworkspace.recentFiles.v2";
 const LEGACY_SAVED_PROJECTS_KEY = "savedProjects";
 const LEGACY_RECENTS_KEY = "pcbworkspace.recentFiles.v1";
 
-const SUPPORT_EMAIL = "spaceroboticscreations@outlook.com";
+export type AuthResult =
+  | { ok: true; mode: "login"; email: string }
+  | { ok: false; error: string };
 
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
-function readUsers(): StoredUser[] {
-  try {
-    const raw = localStorage.getItem(USERS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed.filter(
-      (item): item is StoredUser =>
-        !!item &&
-        typeof (item as { email?: unknown }).email === "string" &&
-        typeof (item as { password?: unknown }).password === "string",
-    );
-  } catch {
-    return [];
-  }
-}
-
-function writeUsers(users: StoredUser[]) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+function getSupabaseClient() {
+  const url = (import.meta.env.VITE_SUPABASE_URL ?? "").trim();
+  const key = (import.meta.env.VITE_SUPABASE_ANON_KEY ?? "").trim();
+  if (!url || !key) return null;
+  return createClient(url, key);
 }
 
 export function getCurrentUserEmail() {
@@ -70,82 +38,56 @@ export function clearSession() {
 }
 
 function migrateLegacyData(email: string) {
-  const scopedSavedProjectsKey = getSavedProjectsKey(email);
+  const scopedSavedKey = getSavedProjectsKey(email);
   const scopedRecentsKey = getRecentsKey(email);
-
-  if (!localStorage.getItem(scopedSavedProjectsKey)) {
-    const legacySavedProjects = localStorage.getItem(LEGACY_SAVED_PROJECTS_KEY);
-    if (legacySavedProjects) {
-      localStorage.setItem(scopedSavedProjectsKey, legacySavedProjects);
-    }
+  if (!localStorage.getItem(scopedSavedKey)) {
+    const legacy = localStorage.getItem(LEGACY_SAVED_PROJECTS_KEY);
+    if (legacy) localStorage.setItem(scopedSavedKey, legacy);
   }
-
   if (!localStorage.getItem(scopedRecentsKey)) {
-    const legacyRecents = localStorage.getItem(LEGACY_RECENTS_KEY);
-    if (legacyRecents) {
-      localStorage.setItem(scopedRecentsKey, legacyRecents);
-    }
+    const legacy = localStorage.getItem(LEGACY_RECENTS_KEY);
+    if (legacy) localStorage.setItem(scopedRecentsKey, legacy);
   }
 }
 
-export async function authenticate(emailInput: string, password: string, accessCodeInput?: string): Promise<AuthResult> {
+export async function authenticate(
+  emailInput: string,
+  password: string,
+): Promise<AuthResult> {
   const email = normalizeEmail(emailInput);
   if (!email || !email.includes("@")) {
     return { ok: false, error: "Enter a valid email address." };
   }
-
   if (!password || password.length < 4) {
     return { ok: false, error: "Password must be at least 4 characters." };
   }
-
-  const users = readUsers();
-  const existingUser = users.find((user) => normalizeEmail(user.email) === email);
-
-  if (!existingUser) {
-    const accessCode = (accessCodeInput ?? "").trim();
-    if (!accessCode) {
-      return {
-        ok: false,
-        error: `Access code required for new accounts. Contact ${SUPPORT_EMAIL}.`,
-      };
-    }
-
-    if (!isLicenseBackendConfigured()) {
-      return {
-        ok: false,
-        error: `License verification service not configured yet. Contact ${SUPPORT_EMAIL}.`,
-      };
-    }
-
-    const consumeResult = await consumeAccessCode(accessCode, email);
-    if (!consumeResult.ok) {
-      return {
-        ok: false,
-        error: consumeResult.error,
-      };
-    }
-
-    const nextUsers = [...users, { email, password }];
-    writeUsers(nextUsers);
-    localStorage.setItem(SESSION_KEY, email);
-    migrateLegacyData(email);
-    void sendWelcomeEmail(email);
-    return { ok: true, mode: "register", email };
+  const client = getSupabaseClient();
+  if (!client) {
+    return { ok: false, error: "Auth service not configured. Contact " + SUPPORT_EMAIL };
   }
-
-  if (existingUser.password !== password) {
-    return { ok: false, error: "Incorrect password for this email." };
+  const { data, error } = await client
+    .from("team_users")
+    .select("email, password")
+    .eq("email", email)
+    .maybeSingle();
+  if (error) {
+    return { ok: false, error: "Could not reach auth service. Try again." };
   }
-
+  if (!data) {
+    return { ok: false, error: "No account found for this email. Contact " + SUPPORT_EMAIL };
+  }
+  if (data.password !== password) {
+    return { ok: false, error: "Incorrect password." };
+  }
   localStorage.setItem(SESSION_KEY, email);
   migrateLegacyData(email);
   return { ok: true, mode: "login", email };
 }
 
 export function getSavedProjectsKey(email: string) {
-  return `${SAVED_PROJECTS_PREFIX}:${normalizeEmail(email)}`;
+  return SAVED_PROJECTS_PREFIX + ":" + normalizeEmail(email);
 }
 
 export function getRecentsKey(email: string) {
-  return `${RECENTS_PREFIX}:${normalizeEmail(email)}`;
+  return RECENTS_PREFIX + ":" + normalizeEmail(email);
 }

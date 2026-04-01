@@ -177,66 +177,29 @@ async function sendRobotCommand(cmd: object): Promise<{ok: boolean; message: str
 
 function LanguagePicker({ onSelect }: { onSelect: (lang: string) => void }) {
   return (
-    <div className="flex flex-col h-full items-center justify-center p-4">
-      <div className="text-center mb-6">
+    <div className="flex flex-col h-full p-4">
+      <div className="text-center mb-4">
         <div className="font-bold text-lg text-white mb-1">PCB <span style={{color:"#00d4ff"}}>Robot</span></div>
         <div className="text-white/60 text-sm">Select your language to start</div>
       </div>
-      <div className="grid grid-cols-2 gap-2 w-full max-w-xs">
-        {LANGUAGES.map(l => (
-          <button
-            key={l.code}
-            type="button"
-            onClick={() => onSelect(l.name)}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-[#00d4ff]/10 hover:border-[#00d4ff]/40 transition-colors text-left"
-          >
-            <span className="text-lg">{l.flag}</span>
-            <span className="text-sm text-white/80">{l.name}</span>
-          </button>
-        ))}
+      <div className="overflow-y-auto flex-1">
+        <div className="grid grid-cols-2 gap-2">
+          {LANGUAGES.map(l => (
+            <button
+              key={l.code}
+              type="button"
+              onClick={() => onSelect(l.name)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-[#00d4ff]/10 hover:border-[#00d4ff]/40 transition-colors text-left"
+            >
+              <span className="text-[10px] font-black bg-white/20 px-1.5 py-0.5 rounded text-white/70 shrink-0">{l.flag}</span>
+              <span className="text-sm text-white/80 truncate">{l.name}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
-}
-
-function RenderMsg({ content, pendingCmd }: { content: string; pendingCmd?: object }) {
-  return (
-    <div className="space-y-0.5">
-      {content.split("\n").map((line, i) => (
-        <p key={i} className={["text-sm leading-relaxed", line.startsWith("-") || line.startsWith(" ") ? "pl-2" : ""].join(" ")}>
-          {line.split(/(\*\*[^*]+\*\*)/).map((part, j) =>
-            part.startsWith("**") && part.endsWith("**")
-              ? <strong key={j} className="text-white">{part.slice(2,-2)}</strong>
-              : part
-          )}
-        </p>
-      ))}
-      {pendingCmd && (
-        <div className="mt-2 p-2 rounded border border-[#10b981]/40 bg-[#10b981]/10 text-[#10b981] text-[10px] font-mono">
-          <p className="font-bold mb-1">Robot command ready:</p>
-          <p>{JSON.stringify(pendingCmd)}</p>
-          <p className="text-white/50 mt-1">Say "okay do that" to execute</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default function PCBRobot() {
-  const [language, setLanguage] = useState<string | null>(null);
-  const [messages, setMessages] = useState<{role:"user"|"assistant";content:string;pendingCmd?:object}[]>([]);
-  const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [robotStatus, setRobotStatus] = useState<"unknown"|"online"|"offline">("unknown");
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior:"smooth" }); }, [messages]);
-
-  useEffect(() => {
-    fetch(`${FLASK_URL}/health`, { signal: AbortSignal.timeout(2000) })
-      .then(r => setRobotStatus(r.ok ? "online" : "offline"))
-      .catch(() => setRobotStatus("offline"));
-  }, []);
+}, []);
 
   function handleLanguageSelect(lang: string) {
     setLanguage(lang);
@@ -397,4 +360,5 @@ export default function PCBRobot() {
     </div>
   );
 }
+
 

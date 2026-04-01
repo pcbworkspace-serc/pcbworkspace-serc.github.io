@@ -4035,7 +4035,16 @@ ROBOT_CMD: {"action": "pick"|"place"|"move"|"align"|"scan", "description": "brie
 
 When the user says "okay do that", "execute", "run that", "do it", or similar, confirm you are sending the command to the robot.
 
-Keep answers concise, technical, and practical. Use dashes for bullet points. Always be helpful and encouraging.`,f7="https://khqvffquritcnznusfcp.supabase.co",h7="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtocXZmZnF1cml0Y256bnVzZmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMTUyODUsImV4cCI6MjA4NzY5MTI4NX0.PNkqYM41fpff_Dr6h-9nnZyEDnlLMijsRaFlv7Aei9A";function p7(n){const e=n.match(/ROBOT_CMD:\s*(\{[^}]+\})/);if(!e)return null;try{const t=JSON.parse(e[1]),i=n.replace(/ROBOT_CMD:\s*\{[^}]+\}/,"").trim();return{cmd:t,cleanText:i}}catch{return null}}async function m7(n){try{return(await fetch(`${RL}/command`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(n),signal:AbortSignal.timeout(3e3)})).ok}catch{return!1}}function g7({content:n,pendingCmd:e}){return P.jsxs("div",{className:"space-y-0.5",children:[n.split(`
+Keep answers concise, technical, and practical. Use dashes for bullet points. Always be helpful and encouraging.
+
+CRITICAL RULE: When a user says "okay do that", "execute", "run that", or "do it", you MUST respond with ONLY this exact format and nothing else:
+EXECUTING: I am sending the command to the robot now.
+ROBOT_CMD: {"action": "pick", "description": "picking up component"}
+
+CRITICAL RULE: When suggesting ANY physical robot action, you MUST end your response with a ROBOT_CMD line in this exact format:
+ROBOT_CMD: {"action": "pick", "description": "your description here"}
+
+Never say you cannot control the robot. You ARE integrated with the robot controller. Always include ROBOT_CMD when suggesting physical actions.`,f7="https://khqvffquritcnznusfcp.supabase.co",h7="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtocXZmZnF1cml0Y256bnVzZmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMTUyODUsImV4cCI6MjA4NzY5MTI4NX0.PNkqYM41fpff_Dr6h-9nnZyEDnlLMijsRaFlv7Aei9A";function p7(n){const e=n.match(/ROBOT_CMD:\s*(\{[^}]+\})/);if(!e)return null;try{const t=JSON.parse(e[1]),i=n.replace(/ROBOT_CMD:\s*\{[^}]+\}/,"").trim();return{cmd:t,cleanText:i}}catch{return null}}async function m7(n){try{return(await fetch(`${RL}/command`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(n),signal:AbortSignal.timeout(3e3)})).ok}catch{return!1}}function g7({content:n,pendingCmd:e}){return P.jsxs("div",{className:"space-y-0.5",children:[n.split(`
 `).map((t,i)=>P.jsx("p",{className:["text-sm leading-relaxed",t.startsWith("-")||t.startsWith(" ")?"pl-2":""].join(" "),children:t.split(/(\*\*[^*]+\*\*)/).map((r,s)=>r.startsWith("**")&&r.endsWith("**")?P.jsx("strong",{className:"text-white",children:r.slice(2,-2)},s):r)},i)),e&&P.jsxs("div",{className:"mt-2 p-2 rounded border border-[#10b981]/40 bg-[#10b981]/10 text-[#10b981] text-[10px] font-mono",children:["Robot command ready: ",JSON.stringify(e),P.jsx("p",{className:"text-white/50 mt-1",children:'Say "okay do that" to execute'})]})]})}function v7(){const[n,e]=k.useState([{role:"assistant",content:`Hi! I am Layla, your PCB design assistant and robot co-pilot.
 
 I can help you design PCBs step by step, and when the robot is connected I can send commands directly to the gripper.

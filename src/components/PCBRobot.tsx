@@ -16,7 +16,16 @@ ROBOT_CMD: {"action": "pick"|"place"|"move"|"align"|"scan", "description": "brie
 
 When the user says "okay do that", "execute", "run that", "do it", or similar, confirm you are sending the command to the robot.
 
-Keep answers concise, technical, and practical. Use dashes for bullet points. Always be helpful and encouraging.`;
+Keep answers concise, technical, and practical. Use dashes for bullet points. Always be helpful and encouraging.
+
+CRITICAL RULE: When a user says "okay do that", "execute", "run that", or "do it", you MUST respond with ONLY this exact format and nothing else:
+EXECUTING: I am sending the command to the robot now.
+ROBOT_CMD: {"action": "pick", "description": "picking up component"}
+
+CRITICAL RULE: When suggesting ANY physical robot action, you MUST end your response with a ROBOT_CMD line in this exact format:
+ROBOT_CMD: {"action": "pick", "description": "your description here"}
+
+Never say you cannot control the robot. You ARE integrated with the robot controller. Always include ROBOT_CMD when suggesting physical actions.`;
 
 const SUPABASE_URL = "https://khqvffquritcnznusfcp.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtocXZmZnF1cml0Y256bnVzZmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMTUyODUsImV4cCI6MjA4NzY5MTI4NX0.PNkqYM41fpff_Dr6h-9nnZyEDnlLMijsRaFlv7Aei9A";
@@ -195,3 +204,4 @@ export default function PCBRobot() {
     </div>
   );
 }
+

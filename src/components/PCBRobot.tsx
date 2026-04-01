@@ -10,6 +10,9 @@ const SYSTEM_PROMPT = `You are Layla, an expert PCB design and electronics engin
 
 Keep answers concise, technical, and practical. Use dashes for bullet points. Always be helpful and encouraging.`;
 
+const SUPABASE_URL = "https://khqvffquritcnznusfcp.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtocXZmZnF1cml0Y256bnVzZmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMTUyODUsImV4cCI6MjA4NzY5MTI4NX0.PNkqYM41fpff_Dr6h-9nnZyEDnlLMijsRaFlv7Aei9A";
+
 function RenderMsg({ content }: { content: string }) {
   return (
     <div className="space-y-0.5">
@@ -44,18 +47,13 @@ export default function PCBRobot() {
     setMessages(newMessages);
 
     try {
-      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/layla-chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 1024,
           system: SYSTEM_PROMPT,
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
         }),

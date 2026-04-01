@@ -3,121 +3,66 @@
 const FLASK_URL = "http://127.0.0.1:5000";
 
 const LANGUAGES = [
-  { code:"en", name:"English", flag:"🇺🇸" },
-  { code:"es", name:"Español", flag:"🇪🇸" },
-  { code:"fr", name:"Français", flag:"🇫🇷" },
-  { code:"de", name:"Deutsch", flag:"🇩🇪" },
-  { code:"pt", name:"Português", flag:"🇧🇷" },
-  { code:"it", name:"Italiano", flag:"🇮🇹" },
-  { code:"zh", name:"中文", flag:"🇨🇳" },
-  { code:"ja", name:"日本語", flag:"🇯🇵" },
-  { code:"ko", name:"한국어", flag:"🇰🇷" },
-  { code:"ar", name:"العربية", flag:"🇸🇦" },
-  { code:"ru", name:"Русский", flag:"🇷🇺" },
-  { code:"hi", name:"हिन्दी", flag:"🇮🇳" },
-  { code:"nl", name:"Nederlands", flag:"🇳🇱" },
-  { code:"tr", name:"Türkçe", flag:"🇹🇷" },
-  { code:"pl", name:"Polski", flag:"🇵🇱" },
-  { code:"sv", name:"Svenska", flag:"🇸🇪" },
-  { code:"da", name:"Dansk", flag:"🇩🇰" },
+  { code:"en", name:"English", flag:"US" },
+  { code:"es", name:"Español", flag:"ES" },
+  { code:"fr", name:"Français", flag:"FR" },
+  { code:"de", name:"Deutsch", flag:"DE" },
+  { code:"pt", name:"Português", flag:"PT" },
+  { code:"pt-BR", name:"Português (Brasil)", flag:"BR" },
+  { code:"it", name:"Italiano", flag:"IT" },
+  { code:"zh", name:"中文", flag:"CN" },
+  { code:"ja", name:"日本語", flag:"JP" },
+  { code:"ko", name:"한국어", flag:"KR" },
+  { code:"ar", name:"العربية", flag:"AR" },
+  { code:"ru", name:"Русский", flag:"RU" },
+  { code:"hi", name:"हिन्दी", flag:"IN" },
+  { code:"nl", name:"Nederlands", flag:"NL" },
+  { code:"tr", name:"Türkçe", flag:"TR" },
+  { code:"pl", name:"Polski", flag:"PL" },
+  { code:"sv", name:"Svenska", flag:"SE" },
+  { code:"da", name:"Dansk", flag:"DK" },
+  { code:"no", name:"Norsk", flag:"NO" },
+  { code:"fi", name:"Suomi", flag:"FI" },
+  { code:"el", name:"Ελληνικά", flag:"GR" },
+  { code:"uk", name:"Українська", flag:"UA" },
+  { code:"cs", name:"Čeština", flag:"CZ" },
+  { code:"ro", name:"Română", flag:"RO" },
+  { code:"id", name:"Bahasa Indonesia", flag:"ID" },
+  { code:"vi", name:"Tiếng Việt", flag:"VN" },
+  { code:"th", name:"ไทย", flag:"TH" },
+  { code:"he", name:"עברית", flag:"IL" },
+  { code:"tl", name:"Filipino", flag:"PH" },
+  { code:"ms", name:"Bahasa Melayu", flag:"MY" },
+  { code:"bn", name:"বাংলা", flag:"BD" },
+  { code:"ur", name:"اردو", flag:"PK" },
+  { code:"sw", name:"Swahili", flag:"SW" },
 ];
 
 const SYSTEM_PROMPT = (lang: string) => `You are Layla, an expert PCB design assistant and robot co-pilot for SERC (Space Engineering Research Center). You help students learn electronics by building any PCB project they can imagine using the robot arm.
 
-IMPORTANT: You MUST respond ONLY in ${lang}. All your responses must be in ${lang} regardless of what language the user writes in.
+IMPORTANT: You MUST respond ONLY in ${lang}. All your responses must be in ${lang}.
 
 You have deep knowledge of every category of PCB project including but not limited to:
 
-SENSING & MEASUREMENT:
-- Altimeters (BMP390, MS5611 - barometric pressure, altitude)
-- IMU boards (MPU6050, MPU9250, BNO055 - accelerometer, gyro, magnetometer)
-- Environmental stations (BME680, SHT31, CCS811 - temp, humidity, air quality, CO2)
-- GPS trackers (NEO-M8N, ZOE-M8Q - position, speed, time)
-- Ultrasonic rangefinders (HC-SR04, TFmini LiDAR)
-- Load cell amplifiers (HX711 - weight sensing)
-- Current/power monitors (INA219, INA3221 - voltage, current, power)
-- Thermocouple interfaces (MAX31855, MAX31865 - high temp sensing)
-- Hall effect sensor boards (ACS712, DRV5053 - current, position)
-- Geiger counter circuits (high voltage, pulse detection)
-- Seismic sensors (ADXL355 - low noise accelerometer)
+SENSING & MEASUREMENT: Altimeters (BMP390, MS5611), IMU boards (MPU6050, MPU9250, BNO055), Environmental stations (BME680, SHT31, CCS811), GPS trackers (NEO-M8N), Ultrasonic rangefinders, Load cell amplifiers (HX711), Current monitors (INA219), Thermocouple interfaces (MAX31855), Hall effect sensors (ACS712), Geiger counters, Seismic sensors (ADXL355)
 
-POWER ELECTRONICS:
-- Buck converters (LM2596, TPS54340, MP1584 - step down)
-- Boost converters (MT3608, XL6009, TPS61023 - step up)
-- Buck-boost converters (TPS63020, LTC3780)
-- LDO regulators (AMS1117, MCP1700, TLV1117)
-- Battery chargers (TP4056, MCP73831, BQ24079)
-- Battery management systems (BQ29700, DW01, S-8261)
-- MPPT solar chargers (CN3791, BQ24650)
-- Wireless charging (WPC Qi, BQ51013)
+POWER ELECTRONICS: Buck converters (LM2596, TPS54340), Boost converters (MT3608, XL6009), Buck-boost (TPS63020), LDO regulators (AMS1117), Battery chargers (TP4056, BQ24079), BMS circuits, MPPT solar chargers, Wireless charging (Qi)
 
-MOTOR CONTROL:
-- DC motor drivers (L298N, DRV8833, TB6612FNG)
-- BLDC controllers (DRV8302, VESC, SimpleFOC)
-- Stepper motor drivers (A4988, DRV8825, TMC2209, TMC2130)
-- Servo controllers (PCA9685 - 16ch PWM)
-- Brushless ESC design (FETs, gate drivers, back-EMF sensing)
+MOTOR CONTROL: DC motor drivers (L298N, DRV8833), BLDC controllers (DRV8302), Stepper drivers (A4988, TMC2209), Servo controllers (PCA9685), Brushless ESC design
 
-COMMUNICATION & CONNECTIVITY:
-- USB interfaces (CH340, CP2102, FTDI)
-- USB-C power delivery (FUSB302, STUSB4500)
-- CAN bus interfaces (MCP2515, SN65HVD230, TJA1050)
-- RS485/RS422 (MAX485, SP3485)
-- Ethernet (W5500, LAN8720)
-- WiFi modules (ESP8266, ESP32)
-- Bluetooth (nRF52840, CC2640 - BLE 5.0)
-- LoRa long range (SX1276, RFM95W)
-- NFC/RFID (PN532, MFRC522)
-- UWB positioning (DW1000, DW3000)
+COMMUNICATION: USB interfaces (CH340, CP2102), USB-C PD (FUSB302), CAN bus (MCP2515), RS485 (MAX485), Ethernet (W5500), WiFi (ESP32), Bluetooth (nRF52840), LoRa (SX1276), NFC (PN532), UWB (DW1000)
 
-MICROCONTROLLER & PROCESSOR BOARDS:
-- STM32 breakouts (F103, F411, G474)
-- ESP32 custom boards (WROOM, WROVER)
-- RP2040 boards (Raspberry Pi silicon)
-- SAMD21/SAMD51 (Arduino compatible)
-- nRF52840 boards (Nordic - BLE + USB)
-- FPGA boards (iCE40, ECP5, Xilinx Spartan)
-- RISC-V boards (GD32VF103, ESP32-C3)
+MICROCONTROLLERS: STM32, ESP32, RP2040, SAMD21/51, nRF52840, FPGA (iCE40, ECP5), RISC-V
 
-AUDIO:
-- Class D amplifiers (TPA3116, TPA3118, MAX98357)
-- Class AB amplifiers (LM386, TDA2030, TPA6120)
-- Headphone amplifiers (OPA2134, NE5532, AD8397)
-- DAC boards (PCM5102, ES9038, AK4493)
-- MEMS microphone arrays (SPH0645, ICS-43434)
-- Guitar effects pedals (op-amp circuits, clipping, filtering)
-- Synthesizer VCO/VCF circuits (analog, CEM3340)
+AUDIO: Class D amps (TPA3116), Class AB (LM386), DAC boards (PCM5102), MEMS mics, Guitar pedals, Synthesizer VCO/VCF
 
-DISPLAY & LIGHTING:
-- LED matrix drivers (IS31FL3741, HT16K33, MAX7219)
-- Addressable LED controllers (WS2812B, SK6812, APA102)
-- OLED display interfaces (SSD1306, SH1106)
-- TFT display drivers (ILI9341, ST7789)
-- E-ink display interfaces (GDEW042T2, UC8151)
-- High power LED drivers (constant current, dimmable)
+DISPLAY & LIGHTING: LED matrix (MAX7219), Addressable LEDs (WS2812B), OLED (SSD1306), TFT (ILI9341), E-ink displays
 
-ROBOTICS & AUTOMATION:
-- Encoder interfaces (quadrature, differential, AB/Z)
-- End effector control (gripper, vacuum, electromagnet)
-- Robot joint controllers (torque control, impedance)
-- Vision system interfaces (camera modules, CSI/MIPI)
-- Drone ESC and flight controller boards
-- Autonomous vehicle sensor fusion boards
+ROBOTICS: Encoder interfaces, End effector control, Vision system interfaces, Drone ESC, Flight controllers
 
-BIOMEDICAL & WEARABLE:
-- ECG/EKG front ends (INA128, AD8232)
-- EMG amplifiers (instrumentation amp, band-pass filter)
-- Pulse oximeters (MAX30102 - SpO2, heart rate)
-- EEG interfaces (ADS1299 - neural signals)
-- Galvanic skin response (GSR sensor circuit)
-- Smart watch circuits (display, battery, BLE, sensors)
+BIOMEDICAL: ECG front ends (AD8232), Pulse oximeters (MAX30102), EEG (ADS1299), Smart watch circuits
 
-INDUSTRIAL & TEST EQUIPMENT:
-- Signal generators (DDS - AD9833, AD9850)
-- LCR meters (AC bridge circuits)
-- Logic analyzers (FPGA based, parallel capture)
-- Thermal cameras (MLX90640 array)
-- Oscilloscope front ends (attenuator, buffer, ADC)
+INDUSTRIAL: Signal generators (AD9833), Logic analyzers, Thermal cameras (MLX90640), Oscilloscope front ends
 
 ROBOT ARM CAPABILITIES:
 - pick: grab a component from the tray
@@ -199,7 +144,46 @@ function LanguagePicker({ onSelect }: { onSelect: (lang: string) => void }) {
       </div>
     </div>
   );
-}, []);
+}
+
+function RenderMsg({ content, pendingCmd }: { content: string; pendingCmd?: object }) {
+  return (
+    <div className="space-y-0.5">
+      {content.split("\n").map((line, i) => (
+        <p key={i} className={["text-sm leading-relaxed", line.startsWith("-") || line.startsWith(" ") ? "pl-2" : ""].join(" ")}>
+          {line.split(/(\*\*[^*]+\*\*)/).map((part, j) =>
+            part.startsWith("**") && part.endsWith("**")
+              ? <strong key={j} className="text-white">{part.slice(2,-2)}</strong>
+              : part
+          )}
+        </p>
+      ))}
+      {pendingCmd && (
+        <div className="mt-2 p-2 rounded border border-[#10b981]/40 bg-[#10b981]/10 text-[#10b981] text-[10px] font-mono">
+          <p className="font-bold mb-1">Robot command ready:</p>
+          <p>{JSON.stringify(pendingCmd)}</p>
+          <p className="text-white/50 mt-1">Say "okay do that" to execute</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function PCBRobot() {
+  const [language, setLanguage] = useState<string | null>(null);
+  const [messages, setMessages] = useState<{role:"user"|"assistant";content:string;pendingCmd?:object}[]>([]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [robotStatus, setRobotStatus] = useState<"unknown"|"online"|"offline">("unknown");
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior:"smooth" }); }, [messages]);
+
+  useEffect(() => {
+    fetch(`${FLASK_URL}/health`, { signal: AbortSignal.timeout(2000) })
+      .then(r => setRobotStatus(r.ok ? "online" : "offline"))
+      .catch(() => setRobotStatus("offline"));
+  }, []);
 
   function handleLanguageSelect(lang: string) {
     setLanguage(lang);
@@ -219,7 +203,7 @@ function LanguagePicker({ onSelect }: { onSelect: (lang: string) => void }) {
     })
     .then(r => r.json())
     .then(data => {
-      const reply = data.content?.[0]?.text ?? "Hi! I am Layla. Tell me what you want to build!";
+      const reply = (data.content?.[0]?.text) ?? "Hi! I am Layla. Tell me what you want to build!";
       setMessages([{ role: "assistant", content: reply }]);
       setBusy(false);
     })
@@ -244,8 +228,8 @@ function LanguagePicker({ onSelect }: { onSelect: (lang: string) => void }) {
       setMessages(prev => [...prev, {
         role: "assistant",
         content: result.ok
-          ? `Command sent! ${result.message}\n\nReady for the next step - say "next" to continue.`
-          : `${result.message}\n\nReady to continue planning - say "next step" to keep going.`,
+          ? "Command sent! " + result.message + "\n\nReady for the next step - say next to continue."
+          : result.message + "\n\nReady to continue planning - say next step to keep going.",
       }]);
       setBusy(false);
       return;
@@ -255,11 +239,11 @@ function LanguagePicker({ onSelect }: { onSelect: (lang: string) => void }) {
     setMessages(prev => [...prev, { role: "user", content: text }]);
 
     try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/layla-chat`, {
+      const response = await fetch(SUPABASE_URL + "/functions/v1/layla-chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+          "Authorization": "Bearer " + SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
           system: SYSTEM_PROMPT(language),
@@ -311,7 +295,7 @@ function LanguagePicker({ onSelect }: { onSelect: (lang: string) => void }) {
           <div className="text-[9px] text-white/40 uppercase tracking-widest">Layla - Your EE Assistant</div>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => setLanguage(null)} className="text-[9px] text-white/30 hover:text-white/60">
+          <button type="button" onClick={() => { setLanguage(null); setMessages([]); }} className="text-[9px] text-white/30 hover:text-white/60 border border-white/10 px-2 py-0.5 rounded">
             {LANGUAGES.find(l => l.name === language)?.flag} {language}
           </button>
           <div className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${robotStatus === "online" ? "bg-[#10b981]/20 text-[#10b981]" : "bg-red-500/20 text-red-400"}`}>
@@ -360,5 +344,3 @@ function LanguagePicker({ onSelect }: { onSelect: (lang: string) => void }) {
     </div>
   );
 }
-
-

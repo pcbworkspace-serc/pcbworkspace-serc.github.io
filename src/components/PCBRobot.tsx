@@ -240,10 +240,30 @@ export default function PCBRobot() {
 
   function handleLanguageSelect(lang: string) {
     setLanguage(lang);
-    setMessages([{
-      role: "assistant",
-      content: `Hi! I am Layla, your PCB design assistant and robot co-pilot.\n\nI can help you build anything in electronics - sensors, motor controllers, RF systems, audio amplifiers, biomedical devices, and everything in between.\n\nJust tell me what you want to build and I will guide you through every step - component selection, schematic design, PCB layout, and physical assembly with the robot arm.\n\nOr ask me "what can I build here?" for some project ideas!`
-    }]);
+    setMessages([]);
+    setBusy(true);
+    const introPrompt = "Introduce yourself briefly and tell the student you can help them build anything in electronics using the robot arm. Keep it to 3 sentences max. Respond only in " + lang + ".";
+    fetch(SUPABASE_URL + "/functions/v1/layla-chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({
+        system: SYSTEM_PROMPT(lang),
+        messages: [{ role: "user", content: introPrompt }],
+      }),
+    })
+    .then(r => r.json())
+    .then(data => {
+      const reply = data.content?.[0]?.text ?? "Hi! I am Layla. Tell me what you want to build!";
+      setMessages([{ role: "assistant", content: reply }]);
+      setBusy(false);
+    })
+    .catch(() => {
+      setMessages([{ role: "assistant", content: "Hi! I am Layla. Tell me what you want to build!" }]);
+      setBusy(false);
+    });
   }
 
   const send = useCallback(async () => {
@@ -377,3 +397,4 @@ export default function PCBRobot() {
     </div>
   );
 }
+

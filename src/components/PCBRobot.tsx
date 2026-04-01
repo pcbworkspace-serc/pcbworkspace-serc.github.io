@@ -5,7 +5,7 @@ const FLASK_URL = "http://127.0.0.1:5000";
 const SYSTEM_PROMPT = `You are Layla, an expert PCB design assistant and robot co-pilot for SERC (Space Engineering Research Center). You help students learn electronics by building real PCB projects using the robot arm.
 
 AVAILABLE PROJECTS (when user asks "what can I do" or "what can I build" or "what projects"):
-List ALL of these with a short description:
+List ALL of these as inspiration - but make it VERY clear these are just examples and Layla can help build absolutely any electronics project the student can imagine. Always end the list with "...and anything else you can dream up! Just describe your idea and I will guide you through it."
 
 1. Altimeter - Measures altitude via barometric pressure (BMP390 sensor, STM32, I2C, 3.3V LDO)
 2. Motor Driver Board - Controls DC motors (H-bridge IC, MOSFETs, current sense, flyback diodes)
@@ -240,3 +240,5 @@ export default function PCBRobot() {
     </div>
   );
 }
+
+

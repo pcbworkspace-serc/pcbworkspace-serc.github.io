@@ -1,28 +1,6 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+﻿import { useState, useCallback, useRef, useEffect } from "react";
 type Message = { role: "user"|"assistant"; content: string; };
 type KBEntry = { keywords: string[]; answer: string };
-
-const LANGUAGES = [
-  { code:"en", name:"English", flag:"US" },
-  { code:"es", name:"Español", flag:"ES" },
-  { code:"fr", name:"Français", flag:"FR" },
-  { code:"de", name:"Deutsch", flag:"DE" },
-  { code:"pt", name:"Português", flag:"PT" },
-  { code:"pt-BR", name:"Português (Brasil)", flag:"BR" },
-  { code:"it", name:"Italiano", flag:"IT" },
-  { code:"zh", name:"中文", flag:"CN" },
-  { code:"ja", name:"日本語", flag:"JP" },
-  { code:"ko", name:"한국어", flag:"KR" },
-  { code:"ar", name:"العربية", flag:"AR" },
-  { code:"ru", name:"Русский", flag:"RU" },
-  { code:"hi", name:"हिन्दी", flag:"IN" },
-  { code:"nl", name:"Nederlands", flag:"NL" },
-  { code:"tr", name:"Türkçe", flag:"TR" },
-  { code:"pl", name:"Polski", flag:"PL" },
-  { code:"sv", name:"Svenska", flag:"SE" },
-  { code:"da", name:"Dansk", flag:"DK" },
-];
-
 const KB: KBEntry[] = [
   { keywords:["resistor","resistance","ohm","ohms law"], answer:"Great question! Resistors are fundamental to every circuit you will ever design. Ohm's Law ties it all together: V = I x R\n• Power dissipated: P = I²R = V²/R\n• Series: R_total = R1 + R2 (they add up)\n• Parallel: 1/R_total = 1/R1 + 1/R2 (total is always less than the smallest)\n• 4-band color code: Blk=0 Brn=1 Red=2 Org=3 Yel=4 Grn=5 Blu=6 Vio=7 Gry=8 Wht=9\nOnce you memorize the color code, reading resistors becomes second nature!\nSource: Sedra & Smith, Microelectronic Circuits Ch.1" },
   { keywords:["capacitor","capacitance","farad","decoupling","bypass"], answer:"Capacitors are endlessly useful — they show up in almost every subsystem you will work with. C = Q/V\n• Energy stored: E = 0.5CV²\n• Impedance: Z = 1/(jwC) — short circuit at high frequencies, open at DC\n• Series: 1/C = 1/C1 + 1/C2 | Parallel: C = C1 + C2\n• One of the most impactful things you can do on a PCB: place a 100nF decoupling cap within 1mm of every IC power pin. It genuinely makes a difference.\n• Electrolytic caps are polarized — longer lead is positive, never reverse them.\nSource: Horowitz & Hill, The Art of Electronics Ch.1" },
@@ -41,13 +19,11 @@ const KB: KBEntry[] = [
   { keywords:["place","placement","put","add","drag","drop"], answer:"Placing components on the board is straightforward.\n1. Locate the component in the Inventory panel on the left\n2. Click and drag it onto the PCB board\n3. Release to drop it at that position\nAvailable components: Resistor, Diode, Capacitor, LED, Transistor, Channel Port\nIn a real assembly workflow, this robot arm would pick and place each component using the JEPA vision system for sub-millimeter accuracy." },
   { keywords:["help","what can","commands","tutorial","how"], answer:"Happy to help! Here is what I can assist with:\n• Electronics theory — resistors, capacitors, inductors, transistors, op-amps, diodes\n• PCB design — trace width, clearance, via sizing, impedance, grounding, EMI\n• Assembly — SMT reflow, solder paste, component placement\n• Communication protocols — UART, I2C, SPI, CAN\n• Power electronics — LDO, buck, boost, filtering\n• The JEPA Vision System — how this robot arm uses AI for precision placement\n• Component placement — drag items from Inventory onto the board\n\nSome questions to try:\n  How do I calculate an LED current-limiting resistor?\n  What is the difference between I2C and SPI?\n  How does a buck converter work?" },
 ];
-
 function findAnswer(input: string): string | null {
   const lower = input.toLowerCase();
   for (const e of KB) { if (e.keywords.some(k => lower.includes(k))) return e.answer; }
   return null;
 }
-
 function RenderMsg({ content }: { content: string }) {
   return (
     <div className="space-y-0.5">
@@ -63,46 +39,13 @@ function RenderMsg({ content }: { content: string }) {
     </div>
   );
 }
-
-function LanguagePicker({ onSelect }: { onSelect: (lang: string) => void }) {
-  return (
-    <div className="flex flex-col h-full p-4">
-      <div className="text-center mb-4">
-        <div className="font-bold text-lg text-white mb-1">PCB <span style={{color:"#00d4ff"}}>Robot</span></div>
-        <div className="text-white/60 text-sm">Select your language to start</div>
-      </div>
-      <div className="overflow-y-auto flex-1">
-        <div className="grid grid-cols-2 gap-2">
-          {LANGUAGES.map(l => (
-            <button
-              key={l.code}
-              type="button"
-              onClick={() => onSelect(l.name)}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-[#00d4ff]/10 hover:border-[#00d4ff]/40 transition-colors text-left"
-            >
-              <span className="text-[10px] font-black bg-white/20 px-1.5 py-0.5 rounded text-white/70 shrink-0">{l.flag}</span>
-              <span className="text-sm text-white/80 truncate">{l.name}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function PCBRobot() {
-  const [language, setLanguage] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [visible, setVisible] = useState(true);
+  const [messages, setMessages] = useState<Message[]>([{ role:"assistant", content:"Hi! I am Layla, your PCB design assistant. I can help with electronics theory, PCB design rules, component placement, communication protocols, and the JEPA vision system.\n\nFeel free to ask anything — try \"How does a capacitor work?\" or \"What is the difference between I2C and SPI?\"" }]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior:"smooth" }); }, [messages]);
-
-  function handleLanguageSelect(lang: string) {
-    setLanguage(lang);
-    setMessages([{ role:"assistant", content:`Hi! I am Layla, your PCB design assistant. I can help with electronics theory, PCB design rules, component placement, communication protocols, and the JEPA vision system.\n\nFeel free to ask anything — try "How does a capacitor work?" or "What is the difference between I2C and SPI?"` }]);
-  }
-
   const send = useCallback(async () => {
     const text = input.trim();
     if (!text || busy) return;
@@ -115,45 +58,36 @@ export default function PCBRobot() {
       setBusy(false); return;
     }
     try {
-      const res = await fetch("http://127.0.0.1:5000/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({message:text, language}), signal:AbortSignal.timeout(4000) });
+      const res = await fetch("http://127.0.0.1:5000/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({message:text}), signal:AbortSignal.timeout(4000) });
       if (res.ok) { const d = await res.json() as {reply?:string}; setMessages(prev=>[...prev,{role:"assistant",content:d.reply??"No response."}]); setBusy(false); return; }
     } catch {}
     setMessages(prev => [...prev, { role:"assistant", content:`That one is outside my current knowledge base, but it is a good question worth researching further.\n\nI can help with: resistors, capacitors, transistors, op-amps, PCB design rules, communication protocols (UART, I2C, SPI), power supplies, and the JEPA vision system.\n\nIs there something along those lines I can help with?` }]);
     setBusy(false);
-  }, [input, busy, language]);
-
-  if (!language) {
-    return (
-      <div className="flex flex-col h-full">
-        <LanguagePicker onSelect={handleLanguageSelect} />
-      </div>
-    );
-  }
-
+  }, [input, busy]);
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 shrink-0">
         <div className="font-bold text-white">PCB <span style={{color:"#00d4ff"}}>Robot</span></div>
-        <button type="button" onClick={() => { setLanguage(null); setMessages([]); }} className="text-xs px-3 py-1 rounded border border-white/20 text-white/70 hover:bg-white/10 transition-colors">
-          {LANGUAGES.find(l => l.name === language)?.flag} {language}
-        </button>
+        <button type="button" onClick={()=>setVisible(v=>!v)} className="text-xs px-3 py-1 rounded border border-white/20 text-white/70 hover:bg-white/10 transition-colors">{visible?"Hide Robot":"Show Robot"}</button>
       </div>
-      <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
-        {messages.map((m,i) => (
-          <div key={i} className={m.role==="user"?"text-right":"text-left"}>
-            <div className={["inline-block max-w-[92%] px-3 py-2 rounded-lg text-left", m.role==="user"?"bg-[#00d4ff]/15 text-[#00d4ff]":"bg-black/30 text-white/85"].join(" ")}>
-              <div className="text-[10px] opacity-60 mb-1">{m.role==="user"?"you:":"Layla:"}</div>
-              <RenderMsg content={m.content} />
+      {visible && <>
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
+          {messages.map((m,i) => (
+            <div key={i} className={m.role==="user"?"text-right":"text-left"}>
+              <div className={["inline-block max-w-[92%] px-3 py-2 rounded-lg text-left", m.role==="user"?"bg-[#00d4ff]/15 text-[#00d4ff]":"bg-black/30 text-white/85"].join(" ")}>
+                <div className="text-[10px] opacity-60 mb-1">{m.role==="user"?"you:":"Layla:"}</div>
+                <RenderMsg content={m.content} />
+              </div>
             </div>
-          </div>
-        ))}
-        {busy && <div className="text-left"><div className="inline-block px-3 py-2 rounded-lg bg-black/30"><div className="flex gap-1">{[0,1,2].map(i=><div key={i} className="w-1.5 h-1.5 bg-[#00d4ff]/60 rounded-full animate-bounce" style={{animationDelay:`${i*150}ms`}}/>)}</div></div></div>}
-        <div ref={bottomRef}/>
-      </div>
-      <div className="p-3 border-t border-white/10 flex gap-2 shrink-0">
-        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")send();}} className="flex-1 rounded-md px-3 py-2 text-sm bg-[#e8f3ff] text-[#001524] border border-[#00d4ff]/30 focus:outline-none focus:ring-2 focus:ring-[#00d4ff]/30" placeholder="Ask Layla an electronics question..." disabled={busy}/>
-        <button type="button" onClick={send} disabled={busy||!input.trim()} className="px-4 py-2 rounded-md font-semibold text-sm bg-[#00d4ff] text-[#001524] hover:bg-[#00b8d9] disabled:opacity-50 transition-colors">{busy?"...":"Send"}</button>
-      </div>
+          ))}
+          {busy && <div className="text-left"><div className="inline-block px-3 py-2 rounded-lg bg-black/30"><div className="flex gap-1">{[0,1,2].map(i=><div key={i} className="w-1.5 h-1.5 bg-[#00d4ff]/60 rounded-full animate-bounce" style={{animationDelay:`${i*150}ms`}}/>)}</div></div></div>}
+          <div ref={bottomRef}/>
+        </div>
+        <div className="p-3 border-t border-white/10 flex gap-2 shrink-0">
+          <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")send();}} className="flex-1 rounded-md px-3 py-2 text-sm bg-[#e8f3ff] text-[#001524] border border-[#00d4ff]/30 focus:outline-none focus:ring-2 focus:ring-[#00d4ff]/30" placeholder="Ask Layla an electronics question..." disabled={busy}/>
+          <button type="button" onClick={send} disabled={busy||!input.trim()} className="px-4 py-2 rounded-md font-semibold text-sm bg-[#00d4ff] text-[#001524] hover:bg-[#00b8d9] disabled:opacity-50 transition-colors">{busy?"...":"Send"}</button>
+        </div>
+      </>}
     </div>
   );
 }

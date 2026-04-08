@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: pcbworkspace-flask
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn flask_server:app --bind 0.0.0.0:$PORT --workers 1 --threads 4

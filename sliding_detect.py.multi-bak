@@ -1,0 +1,213 @@
+"""
+Sliding-window object detection using the trained MobileNetV3 classifier.
+
+Approach:
+  1. Resize input image so its longer edge is WORK_SIZE (default 384px).
+     Smaller = faster, larger = catches finer components.
+  2. Slide a 64x64 window across with stride STRIDE (default 32px).
+     This produces a grid of crops.
+  3. For each crop, run the classifier. If any class scores above
+     SCORE_MIN, record a candidate detection: {box, class, score}.
+  4. Run per-class non-maximum suppression (NMS) to deduplicate
+     overlapping boxes for the same class.
+  5. Return the list, sorted by score.
+
+Honest framing for the paper / prof:
+  This is the classical "classifier as detector via sliding window"
+  approach, predating Faster R-CNN by years. It demonstrates how the
+  trained classifier can be repurposed for localization without any
+  additional training. mAP on detection will be lower than dedicated
+  detectors trained with bounding-box supervision, and components
+  smaller than the window or with extreme aspect ratios will be missed.
+"""
+from __future__ import annotations
+
+import io
+from typing import Optional
+
+try:
+    import torch
+    import numpy as np
+    from PIL import Image
+    _DEPS_OK = True
+except ImportError:
+    _DEPS_OK = False
+
+
+WORK_SIZE   = 384   # resize input so longer edge = this many pixels
+WIN_SIZE    = 64    # sliding window size (matches training input)
+STRIDE      = 32    # window step (smaller = more boxes, slower)
+SCORE_MIN   = 0.30  # minimum class score to consider a window
+NMS_IOU     = 0.30  # IoU threshold for non-max suppression
+TOP_K_PER_WIN = 3   # consider this many top classes per window
+MAX_BOXES   = 30    # safety cap on returned boxes
+
+
+def _iou(a, b):
+    """IoU of two boxes [x1, y1, x2, y2]."""
+    ax1, ay1, ax2, ay2 = a
+    bx1, by1, bx2, by2 = b
+    ix1 = max(ax1, bx1); iy1 = max(ay1, by1)
+    ix2 = min(ax2, bx2); iy2 = min(ay2, by2)
+    iw = max(0.0, ix2 - ix1)
+    ih = max(0.0, iy2 - iy1)
+    inter = iw * ih
+    if inter == 0:
+        return 0.0
+    a_area = (ax2 - ax1) * (ay2 - ay1)
+    b_area = (bx2 - bx1) * (by2 - by1)
+    return inter / (a_area + b_area - inter)
+
+
+def _nms(boxes, iou_thresh=NMS_IOU):
+    """Per-class non-max suppression. boxes: list of dicts with keys
+    box (xyxy), class, score. Returns deduplicated list."""
+    by_class = {}
+    for b in boxes:
+        by_class.setdefault(b["class"], []).append(b)
+
+    kept = []
+    for cls, items in by_class.items():
+        items.sort(key=lambda x: -x["score"])
+        survivors = []
+        for cand in items:
+            ok = True
+            for surv in survivors:
+                if _iou(cand["box"], surv["box"]) > iou_thresh:
+                    ok = False
+                    break
+            if ok:
+                survivors.append(cand)
+        kept.extend(survivors)
+
+    kept.sort(key=lambda x: -x["score"])
+    return kept
+
+
+def detect_boxes(image_bytes: bytes, adapter) -> dict:
+    """Run sliding-window detection on the given image bytes.
+
+    Args:
+        image_bytes: raw bytes of a JPEG/PNG file
+        adapter: a ClassifierAdapter (from classifier_adapter.py)
+
+    Returns:
+        {
+          "boxes": [
+            {
+              "box": [x1, y1, x2, y2],      # in DISPLAY coords (orig image)
+              "box_norm": [x1, y1, x2, y2], # 0-1 normalized to display
+              "class": "R",
+              "class_full": "Resistor",
+              "score": 0.78,
+            },
+            ...
+          ],
+          "image_size": [width, height],
+          "work_size": [work_w, work_h],
+          "n_windows_evaluated": int,
+          "model": str,
+          "inference_ms": float,
+        }
+    """
+    if not _DEPS_OK or adapter is None:
+        return {"error": "deps unavailable", "boxes": []}
+
+    import time
+    t0 = time.perf_counter()
+
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    orig_w, orig_h = img.size
+
+    # Resize so longer edge = WORK_SIZE
+    scale = WORK_SIZE / max(orig_w, orig_h)
+    work_w = max(WIN_SIZE, int(round(orig_w * scale)))
+    work_h = max(WIN_SIZE, int(round(orig_h * scale)))
+    img_work = img.resize((work_w, work_h), Image.BILINEAR)
+
+    # Build grid of window positions
+    xs = list(range(0, max(1, work_w - WIN_SIZE + 1), STRIDE))
+    if xs[-1] != work_w - WIN_SIZE:
+        xs.append(work_w - WIN_SIZE)  # ensure right edge covered
+    ys = list(range(0, max(1, work_h - WIN_SIZE + 1), STRIDE))
+    if ys[-1] != work_h - WIN_SIZE:
+        ys.append(work_h - WIN_SIZE)
+
+    # Build a batch of all crops at once (much faster than per-crop forward)
+    crops = []
+    positions = []
+    for y in ys:
+        for x in xs:
+            crop = img_work.crop((x, y, x + WIN_SIZE, y + WIN_SIZE))
+            t = adapter.transform_pil(crop)
+            crops.append(t)
+            positions.append((x, y))
+    if not crops:
+        return {"boxes": [], "n_windows_evaluated": 0,
+                "image_size": [orig_w, orig_h],
+                "model": "MobileNetV3 + sliding-window",
+                "inference_ms": 0.0}
+
+    batch = torch.stack(crops, dim=0).to(adapter.device)
+    with torch.no_grad():
+        logits = adapter.model(batch)
+        probs = torch.sigmoid(logits).cpu().numpy()  # (N, num_classes)
+
+    # Convert to candidate boxes
+    candidates = []
+    class_names = adapter.class_names
+    for i, (x, y) in enumerate(positions):
+        scores = probs[i]
+        # Take top-K classes for this window
+        top_idx = np.argsort(scores)[::-1][:TOP_K_PER_WIN]
+        for ci in top_idx:
+            s = float(scores[ci])
+            if s < SCORE_MIN:
+                continue
+            # Box in working coords
+            bx1, by1 = x, y
+            bx2, by2 = x + WIN_SIZE, y + WIN_SIZE
+            # Scale back to original image coords
+            inv = 1.0 / scale
+            ox1 = float(bx1 * inv)
+            oy1 = float(by1 * inv)
+            ox2 = float(bx2 * inv)
+            oy2 = float(by2 * inv)
+            cls = class_names[ci] if ci < len(class_names) else f"class_{ci}"
+            candidates.append({
+                "box": [ox1, oy1, ox2, oy2],
+                "box_norm": [ox1 / orig_w, oy1 / orig_h, ox2 / orig_w, oy2 / orig_h],
+                "class": cls,
+                "score": s,
+            })
+
+    # NMS to dedupe
+    boxes = _nms(candidates)
+    boxes = boxes[:MAX_BOXES]
+
+    # Add full names for display
+    from classifier_adapter import _default_class_names  # noqa
+    # Best-effort full-name decoder; mapping lives in nn.ts but we can
+    # provide a hardcoded copy here for the boxes
+    FULL_NAMES = {
+        "R": "Resistor", "RN": "Resistor Network", "RA": "Resistor Array",
+        "C": "Capacitor", "L": "Inductor", "D": "Diode", "LED": "LED",
+        "Q": "Transistor", "QA": "Transistor Array",
+        "U": "Integrated Circuit", "IC": "Integrated Circuit",
+        "T": "Transformer", "F": "Fuse", "FB": "Ferrite Bead",
+        "SW": "Switch", "BTN": "Button",
+        "CR": "Crystal", "CRA": "Crystal Array",
+        "J": "Connector", "JP": "Jumper", "M": "Module", "P": "Plug",
+        "S": "Sensor", "TP": "Test Point", "V": "Voltage Regulator",
+    }
+    for b in boxes:
+        b["class_full"] = FULL_NAMES.get(b["class"], b["class"])
+
+    return {
+        "boxes": boxes,
+        "image_size": [orig_w, orig_h],
+        "work_size": [work_w, work_h],
+        "n_windows_evaluated": len(positions),
+        "model": "MobileNetV3-Small + sliding window",
+        "inference_ms": round((time.perf_counter() - t0) * 1000, 1),
+    }

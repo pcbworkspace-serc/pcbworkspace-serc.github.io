@@ -1,12 +1,34 @@
-﻿const SUPPORT_EMAIL = "spaceroboticscreations@outlook.com";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+const SUPPORT_EMAIL = "spaceroboticscreations@outlook.com";
 const SESSION_KEY = "pcbworkspace.session.v1";
 const SAVED_PROJECTS_PREFIX = "pcbworkspace.savedProjects.v2";
 const RECENTS_PREFIX = "pcbworkspace.recentFiles.v2";
 const LEGACY_SAVED_PROJECTS_KEY = "savedProjects";
 const LEGACY_RECENTS_KEY = "pcbworkspace.recentFiles.v1";
 
-const SUPABASE_URL = "https://khqvffquritcnznusfcp.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtocXZmZnF1cml0Y256bnVzZmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMTUyODUsImV4cCI6MjA4NzY5MTI4NX0.PNkqYM41fpff_Dr6h-9nnZyEDnlLMijsRaFlv7Aei9A";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? "";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
+
+let supabaseClient: SupabaseClient | null = null;
+
+function getSupabase(): SupabaseClient {
+  if (!supabaseClient) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      throw new Error(
+        "Supabase env vars missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file."
+      );
+    }
+    supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        storageKey: "pcbworkspace.supabase.session",
+      },
+    });
+  }
+  return supabaseClient;
+}
 
 export type AuthResult =
   | { ok: true; mode: "login"; email: string }
@@ -27,8 +49,13 @@ export function isAuthenticated() {
   return !!getCurrentUserEmail();
 }
 
-export function clearSession() {
+export async function clearSession() {
   localStorage.removeItem(SESSION_KEY);
+  try {
+    await getSupabase().auth.signOut();
+  } catch {
+    // ignore — best effort
+  }
 }
 
 function migrateLegacyData(email: string) {
@@ -58,27 +85,37 @@ export async function authenticate(
   }
 
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/authenticate-user`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({ email, password }),
+    const supabase = getSupabase();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
 
-    const result = await response.json();
+    if (error) {
+      // Map common Supabase errors to friendlier messages
+      if (error.message.toLowerCase().includes("invalid login credentials")) {
+        return { ok: false, error: "Wrong email or password." };
+      }
+      if (error.message.toLowerCase().includes("email not confirmed")) {
+        return {
+          ok: false,
+          error: `Please confirm your email first. Contact ${SUPPORT_EMAIL} if you didn't get a confirmation email.`,
+        };
+      }
+      return { ok: false, error: error.message };
+    }
 
-    if (!result.ok) {
-      return { ok: false, error: result.error ?? "Authentication failed." };
+    if (!data?.user) {
+      return { ok: false, error: "Authentication failed." };
     }
 
     localStorage.setItem(SESSION_KEY, email);
     migrateLegacyData(email);
     return { ok: true, mode: "login", email };
 
-  } catch {
-    return { ok: false, error: `Could not reach auth service. Contact ${SUPPORT_EMAIL}.` };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Could not reach auth service.";
+    return { ok: false, error: `${msg} Contact ${SUPPORT_EMAIL} if this persists.` };
   }
 }
 

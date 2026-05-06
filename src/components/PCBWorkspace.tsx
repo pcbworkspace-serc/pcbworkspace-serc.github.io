@@ -1,7 +1,10 @@
-import { Canvas } from "@react-three/fiber";
+﻿import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, Grid } from "@react-three/drei";
 import * as THREE from "three";
 import { useState, useCallback, useEffect } from "react";
+import { useRobotPlacement } from "@/hooks/useRobotPlacement";
+import { getPins } from "@/lib/pins";
+import type { Wire, PinRef } from "@/lib/wires";
 
 interface DroppedItem {
   type: string;
@@ -12,9 +15,13 @@ interface DroppedItem {
 type PCBWorkspaceProps = {
   items?: DroppedItem[];
   onItemsChange?: (items: DroppedItem[]) => void;
+  wires?: Wire[];
+  wireMode?: boolean;
+  pendingPin?: PinRef | null;
+  onPinClick?: (ref: PinRef) => void;
 };
 
-/* ── Realistic Components ── */
+/* â”€â”€ Realistic Components â”€â”€ */
 
 function Resistor({ position }: { position: [number, number, number] }) {
   return (
@@ -177,7 +184,7 @@ function Transistor({ position }: { position: [number, number, number] }) {
   );
 }
 
-/* ── Detailed PCB Board ── */
+/* â”€â”€ Detailed PCB Board â”€â”€ */
 
 function PCBBoard() {
   // Generate random-looking but deterministic trace paths
@@ -319,7 +326,8 @@ function PCBBoard() {
   );
 }
 
-/* ── Component Selector ── */
+
+/* â”€â”€ Component Selector â”€â”€ */
 
 function PCBComponent({ position, label }: { position: [number, number, number]; label: string }) {
   switch (label) {
@@ -332,10 +340,115 @@ function PCBComponent({ position, label }: { position: [number, number, number];
   }
 }
 
-/* ── Main Workspace ── */
+/* â”€â”€ Pin Marker â”€â”€ */
 
-export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps) {
+function PinMarker({
+  position,
+  highlighted,
+  visible,
+  onClick,
+}: {
+  position: [number, number, number];
+  highlighted: boolean;
+  visible: boolean;
+  onClick: () => void;
+}) {
+  if (!visible) return null;
+  return (
+    <mesh
+      position={position}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
+      onPointerOut={() => { document.body.style.cursor = "default"; }}
+    >
+      <sphereGeometry args={[0.04, 12, 12]} />
+      <meshStandardMaterial
+        color={highlighted ? "#fbbf24" : "#3aa8ff"}
+        emissive={highlighted ? "#fbbf24" : "#1a4dbf"}
+        emissiveIntensity={highlighted ? 0.8 : 0.4}
+      />
+    </mesh>
+  );
+}
+
+/* â”€â”€ Wire Segment â”€â”€ */
+
+function WireSegment({ from, to }: { from: [number, number, number]; to: [number, number, number] }) {
+  // L-shape routing on the board surface (KiCad-like)
+  // The wire travels from the start pin, drops to the board, routes in two
+  // orthogonal segments (X then Z) at board level, then climbs back up to the end pin.
+  const Y_BOARD = -0.018;        // just above the solder mask
+  const Y_FROM = from[1];
+  const Y_TO   = to[1];
+
+  const cornerX = to[0];
+  const cornerZ = from[2];
+
+  // Helper to render a single cylinder between two points
+  const seg = (a: [number, number, number], b: [number, number, number], key: string) => {
+    const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
+    const length = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    if (length < 0.001) return null;
+    const mid: [number, number, number] = [(a[0]+b[0])/2, (a[1]+b[1])/2, (a[2]+b[2])/2];
+    const dir = new THREE.Vector3(dx, dy, dz).normalize();
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    const e = new THREE.Euler().setFromQuaternion(q);
+    return (
+      <mesh key={key} position={mid} rotation={[e.x, e.y, e.z]}>
+        <cylinderGeometry args={[0.012, 0.012, length, 8]} />
+        <meshStandardMaterial color="#d4a84b" emissive="#fbbf24" emissiveIntensity={0.2} metalness={0.85} roughness={0.25} />
+      </mesh>
+    );
+  };
+
+  const fromPoint: [number, number, number] = [from[0], Y_FROM, from[2]];
+  const fromDrop: [number, number, number] = [from[0], Y_BOARD, from[2]];
+  const corner:   [number, number, number] = [cornerX, Y_BOARD, cornerZ];
+  const toDrop:   [number, number, number] = [to[0], Y_BOARD, to[2]];
+  const toPoint:  [number, number, number] = [to[0], Y_TO, to[2]];
+
+  return (
+    <group>
+      {/* Lead from pin down to board */}
+      {seg(fromPoint, fromDrop, "lead-from")}
+      {/* Horizontal segment along X to corner */}
+      {seg(fromDrop, corner, "x-leg")}
+      {/* Horizontal segment along Z to target column */}
+      {seg(corner, toDrop, "z-leg")}
+      {/* Lead from board up to pin */}
+      {seg(toDrop, toPoint, "lead-to")}
+      {/* Via marker at the corner */}
+      <mesh position={[cornerX, Y_BOARD, cornerZ]}>
+        <cylinderGeometry args={[0.025, 0.025, 0.008, 12]} />
+        <meshStandardMaterial color="#d4a84b" metalness={0.9} roughness={0.15} />
+      </mesh>
+    </group>
+  );
+}
+
+/* â”€â”€ Main Workspace â”€â”€ */
+
+// Captures the current 3D scene render as a JPEG Blob. Registered globally
+// so Index.tsx's runDetection can grab a frame on demand. Has to be inside
+// <Canvas> to access gl via useThree.
+let _sceneCaptureFn: (() => Promise<Blob | null>) | null = null;
+export function captureScene(): Promise<Blob | null> {
+  return _sceneCaptureFn ? _sceneCaptureFn() : Promise.resolve(null);
+}
+function SceneCapturer() {
+  const { gl, scene, camera } = useThree();
+  _sceneCaptureFn = () => new Promise((resolve) => {
+    try {
+      gl.render(scene, camera);
+      gl.domElement.toBlob((blob) => resolve(blob), "image/jpeg", 0.85);
+    } catch { resolve(null); }
+  });
+  return null;
+}
+
+export default function PCBWorkspace({ items, onItemsChange, wires = [], wireMode = false, pendingPin = null, onPinClick }: PCBWorkspaceProps) {
   const [droppedItems, setDroppedItems] = useState<DroppedItem[]>(items ?? []);
+  const placeOnRobot = useRobotPlacement();
 
   useEffect(() => {
     if (items) {
@@ -350,6 +463,7 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 6 - 3;
     const y = ((e.clientY - rect.top) / rect.height) * -4 + 2;
+    placeOnRobot(x, y, type);
     setDroppedItems((prev) => {
       const updated = [...prev, { type, x, y }];
       onItemsChange?.(updated);
@@ -363,7 +477,7 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
     >
-      <Canvas camera={{ position: [4, 5, 4], fov: 50 }} shadows>
+      <Canvas camera={{ position: [4, 5, 4], fov: 50 }} shadows>$([Environment]::NewLine)        <SceneCapturer />
         <ambientLight intensity={0.5} />
         <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow />
         <directionalLight position={[-3, 4, -2]} intensity={0.3} />
@@ -388,6 +502,42 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
             label={item.type}
           />
         ))}
+        {/* Pin markers (visible during wire mode) */}
+        {droppedItems.map((item, ci) =>
+          getPins(item.type).map((pin) => {
+            const worldPos: [number, number, number] = [
+              item.x + pin.position[0],
+              -0.03 + pin.position[1],
+              item.y + pin.position[2],
+            ];
+            const isPending = pendingPin?.componentIndex === ci && pendingPin?.pinName === pin.name;
+            return (
+              <PinMarker
+                key={`pin-${ci}-${pin.name}`}
+                position={worldPos}
+                highlighted={isPending}
+                visible={wireMode}
+                onClick={() => onPinClick?.({ componentIndex: ci, pinName: pin.name })}
+              />
+            );
+          })
+        )}
+        {/* Wires */}
+        {wires.map((w) => {
+          const fromItem = droppedItems[w.fromComponent];
+          const toItem = droppedItems[w.toComponent];
+          if (!fromItem || !toItem) return null;
+          const fromPin = getPins(fromItem.type).find(p => p.name === w.fromPin);
+          const toPin = getPins(toItem.type).find(p => p.name === w.toPin);
+          if (!fromPin || !toPin) return null;
+          const fromPos: [number, number, number] = [
+            fromItem.x + fromPin.position[0], -0.03 + fromPin.position[1], fromItem.y + fromPin.position[2]
+          ];
+          const toPos: [number, number, number] = [
+            toItem.x + toPin.position[0], -0.03 + toPin.position[1], toItem.y + toPin.position[2]
+          ];
+          return <WireSegment key={w.id} from={fromPos} to={toPos} />;
+        })}
         <OrbitControls
           enablePan
           enableZoom

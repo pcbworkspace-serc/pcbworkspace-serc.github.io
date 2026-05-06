@@ -1,0 +1,218 @@
+﻿import { useEffect } from "react";
+
+interface CircuitBlock {
+  name: string;
+  description: string;
+  components: string[];
+}
+
+interface NetAnalysis {
+  numNets: number;
+  totalPins: number;
+  connectedPins: number;
+  floatingPins: number;
+  shorts: string[];
+}
+
+interface DetectResult {
+  groundTruth: { type: string; count: number }[];
+  circuits: CircuitBlock[];
+  nets: NetAnalysis | null;
+  mlClass: string | null;
+  mlConfidence: number | null;
+  mlError: string | null;
+}
+
+interface DetectModalProps {
+  result: DetectResult | null;
+  onClose: () => void;
+  onDetectAgain: () => void;
+  loading: boolean;
+}
+
+const COMPONENT_LETTER: Record<string, string> = {
+  Resistor: "R",
+  Capacitor: "C",
+  Diode: "D",
+  LED: "L",
+  Transistor: "T",
+};
+
+const COMPONENT_COLOR: Record<string, string> = {
+  Resistor: "#f59e0b",
+  Capacitor: "#10b981",
+  Diode: "#a78bfa",
+  LED: "#fbbf24",
+  Transistor: "#ef4444",
+};
+
+export default function DetectModal({ result, onClose, onDetectAgain, loading }: DetectModalProps) {
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [onClose]);
+
+  if (!result && !loading) return null;
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-[90%] max-w-md panel-bg panel-border rounded-xl p-6 shadow-2xl"
+        style={{ animation: "slideUp 0.3s ease-out" }}
+      >
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute top-3 right-3 w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors text-lg"
+        >
+          x
+        </button>
+
+        <h2 className="text-2xl font-bold text-primary mb-1">PCB Detection</h2>
+        <p className="text-xs text-muted-foreground mb-5">
+          Layla Vision &middot; CNN backend
+        </p>
+
+        {loading && (
+          <div className="py-8 text-center">
+            <div className="inline-block w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+            <p className="mt-3 text-sm text-muted-foreground">Analyzing workspace...</p>
+          </div>
+        )}
+
+        {!loading && result && (
+          <>
+            <div className="mb-5">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                On Board
+              </h3>
+              {result.groundTruth.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">
+                  No components detected. Drag one from inventory.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {result.groundTruth.map(({ type, count }) => (
+                    <div
+                      key={type}
+                      className="flex items-center gap-3 px-3 py-2 rounded-md bg-secondary/50 border border-border"
+                    >
+                      <div
+                        className="w-8 h-8 rounded-md flex items-center justify-center text-sm font-bold text-black"
+                        style={{ backgroundColor: COMPONENT_COLOR[type] ?? "#888" }}
+                      >
+                        {COMPONENT_LETTER[type] ?? "?"}
+                      </div>
+                      <span className="flex-1 text-sm font-medium text-foreground">{type}</span>
+                      <span className="text-xs font-mono text-muted-foreground">x{count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {result.circuits && result.circuits.length > 0 && (
+              <div className="mb-5">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  Detected Circuits
+                </h3>
+                <div className="space-y-2">
+                  {result.circuits.map((c, i) => (
+                    <div
+                      key={i}
+                      className="px-3 py-2 rounded-md bg-primary/10 border border-primary/30"
+                    >
+                      <div className="text-sm font-semibold text-primary">{c.name}</div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">{c.description}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {result.nets && result.nets.totalPins > 0 && (
+              <div className="mb-5">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  Net Analysis
+                </h3>
+                <div className="px-3 py-2 rounded-md bg-secondary/30 border border-border space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Nets</span>
+                    <span className="font-mono text-foreground">{result.nets.numNets}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Connected pins</span>
+                    <span className="font-mono text-foreground">{result.nets.connectedPins}/{result.nets.totalPins}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Floating pins</span>
+                    <span className={`font-mono ${result.nets.floatingPins > 0 ? "text-amber-400" : "text-emerald-400"}`}>
+                      {result.nets.floatingPins}
+                    </span>
+                  </div>
+                  {result.nets.shorts.length > 0 && (
+                    <div className="pt-1 border-t border-border/50 mt-1">
+                      {result.nets.shorts.map((s, i) => (
+                        <div key={i} className="text-[10px] text-amber-400">! {s}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {(result.mlClass || result.mlError) && (
+              <div className="mb-5">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  ML Prediction
+                </h3>
+                {result.mlError ? (
+                  <p className="text-sm text-amber-500/80">{result.mlError}</p>
+                ) : (
+                  <div className="px-3 py-2 rounded-md bg-secondary/30 border border-border">
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm font-medium text-foreground">{result.mlClass}</span>
+                      <span className="text-xs font-mono text-primary">
+                        {result.mlConfidence !== null
+                          ? `${(result.mlConfidence * 100).toFixed(1)}%`
+                          : "-"}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        <div className="flex gap-2 pt-2">
+          <button
+            onClick={onDetectAgain}
+            disabled={loading}
+            className="flex-1 h-10 rounded-md bg-primary/15 hover:bg-primary/25 disabled:opacity-50 disabled:cursor-not-allowed border border-primary/40 text-primary text-sm font-semibold transition-colors"
+          >
+            {loading ? "Detecting..." : "Detect Again"}
+          </button>
+          <button
+            onClick={onClose}
+            className="h-10 px-4 rounded-md bg-secondary hover:bg-secondary/80 border border-border text-foreground text-sm font-medium transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}

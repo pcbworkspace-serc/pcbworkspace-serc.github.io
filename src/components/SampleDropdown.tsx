@@ -1,0 +1,64 @@
+﻿import { useState } from "react";
+
+const SAMPLES = [
+  { name: "Validation #1", src: import.meta.env.BASE_URL + "samples/sample_1.png" },
+  { name: "Validation #2", src: import.meta.env.BASE_URL + "samples/sample_2.png" },
+  { name: "Validation #3", src: import.meta.env.BASE_URL + "samples/sample_3.png" },
+  { name: "Validation #4", src: import.meta.env.BASE_URL + "samples/sample_4.png" },
+  { name: "Validation #5", src: import.meta.env.BASE_URL + "samples/sample_5.png" },
+  { name: "Validation #6", src: import.meta.env.BASE_URL + "samples/sample_6.png" },
+  { name: "Validation #7", src: import.meta.env.BASE_URL + "samples/sample_7.png" },
+  { name: "Validation #8", src: import.meta.env.BASE_URL + "samples/sample_8.png" },
+];
+
+interface Props {
+  onPickSample: (file: File) => void;
+}
+
+export default function SampleDropdown({ onPickSample }: Props) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const pick = async (src: string, name: string) => {
+    setOpen(false);
+    setBusy(true);
+    try {
+      const res = await fetch(src);
+      const blob = await res.blob();
+      const file = new File([blob], name + ".png", { type: blob.type || "image/png" });
+      onPickSample(file);
+    } catch (e) {
+      console.error("Failed to load sample:", e);
+      alert("Could not load sample image. Check that public/samples/ has the bundled PNGs.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        disabled={busy}
+        className="h-10 px-4 rounded-md border border-emerald-500/50 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors text-[11px] font-semibold text-emerald-400 disabled:opacity-50"
+      >
+        {busy ? "Loading..." : "Try Sample \u25BE"}
+      </button>
+      {open && (
+        <div className="absolute bottom-full mb-2 right-0 w-44 rounded-md bg-[#0a192f] border border-white/15 shadow-xl z-30 overflow-hidden">
+          {SAMPLES.map((s) => (
+            <button
+              key={s.src}
+              type="button"
+              onClick={() => pick(s.src, s.name)}
+              className="w-full text-left px-3 py-2 text-[11px] text-white/80 hover:bg-emerald-500/20 hover:text-emerald-300 transition-colors"
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

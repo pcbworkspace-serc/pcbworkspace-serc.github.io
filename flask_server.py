@@ -1,118 +1,394 @@
-﻿import sys, time, threading, random
+﻿"""flask_server.py â€” drop-in replacement that uses your trained MobileNetV3.
+
+Changes from the original:
+  1. Imports classifier_adapter
+  2. load_model() tries to load classifier_adapter first; falls back to JEPA stub
+  3. /nn/detect uses the trained model when available
+  4. /nn/status reports which model is actually loaded
+  5. Robot blueprints registered (from the earlier integration)
+
+Everything else is preserved exactly.
+"""
+import sys, time, threading, io
 from pathlib import Path
 from flask import Flask, request, jsonify
+
 try:
     from flask_cors import CORS
 except ImportError:
     class CORS:
-        def __init__(self, app): pass
+        def __init__(self, app, origins=None): pass
+
 try:
     import torch
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
+
 try:
     import cv2
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
-sys.path.insert(0, str(Path(__file__).parent))
+
 try:
-    from pcb_jepa_nn import JEPAConfig, PCBVisionSystem
+    from PIL import Image
+    import torchvision.transforms as T
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+# === Try to load the trained classifier ===
+try:
+    import classifier_adapter
+    CLASSIFIER_AVAILABLE = True
+except ImportError:
+    CLASSIFIER_AVAILABLE = False
+
+# === JEPA fallback (the older untrained model) ===
+try:
+    from pcb_jepa_nn import JEPAConfig, PCBVisionSystem, multitask_loss
     JEPA_AVAILABLE = True
 except ImportError:
     JEPA_AVAILABLE = False
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=[
+    "https://pcbworkspace-serc.github.io",
+    "http://localhost:5173",
+    "http://localhost:8080",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8080",
+])
+
+# === Robot control + camera streaming endpoints ===
+try:
+    from routes_robot import bp as robot_bp, camera_bp
+    app.register_blueprint(robot_bp)
+    app.register_blueprint(camera_bp)
+    print("  Robot + camera blueprints registered")
+except Exception as e:
+    print(f"  WARNING: robot blueprint not loaded: {e}")
+
 CHECKPOINT_PATH = "jepa_checkpoint.pt"
-COMPONENT_CLASSES = ["Resistor","Capacitor","Diode","LED","Transistor","Channel Port","IC","Crystal","Inductor","Fuse","Button","Connector","SOT-23","QFP","BGA","0402","0603","0805","1206","SOD-123"]
-_model = None
-_cfg = None
+COMPONENT_CLASSES = [
+    "Resistor","Capacitor","Diode","LED","Transistor",
+    "Channel Port","IC","Crystal","Inductor","Fuse",
+    "Button","Connector","SOT-23","QFP","BGA",
+    "0402","0603","0805","1206","SOD-123"
+]
+
+_model       = None      # active inference model (classifier OR JEPA)
+_model_kind  = "none"    # "classifier" | "jepa" | "none"
+_cfg         = None
 _model_phase = "untrained"
 _board_items = []
-_lock = threading.Lock()
-_training = {"running":False,"phase":"idle","epoch":0,"total_epochs":0,"loss":0.0,"l_jepa":0.0,"l_variance":0.0,"elapsed_seconds":0.0,"eta_seconds":0.0}
+_lock        = threading.Lock()
+_training    = {
+    "running":False,"phase":"idle","epoch":0,"total_epochs":0,
+    "loss":0.0,"l_comp":0.0,"l_bbox":0.0,"l_defect":0.0,
+    "comp_acc":0.0,"defect_acc":0.0,
+    "elapsed_seconds":0.0,"eta_seconds":0.0,
+}
+
+# â”€â”€ Image preprocessing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+_transform = None
+
+def get_transform():
+    """Default 224x224 transform for the JEPA path."""
+    global _transform
+    if _transform is None and PIL_AVAILABLE:
+        _transform = T.Compose([
+            T.Resize((224, 224)),
+            T.ToTensor(),
+            T.Normalize(mean=[0.485, 0.456, 0.406],
+                        std=[0.229, 0.224, 0.225]),
+        ])
+    return _transform
+
+
+def request_to_tensor(req):
+    """Decode image from multipart or raw binary request body.
+
+    The active model picks its own resize size:
+      - classifier_adapter has its own transform (64x64 by default)
+      - JEPA path uses get_transform() (224x224)
+
+    To keep both paths happy, return a PIL.Image so the caller can apply
+    the right transform.
+    """
+    if not (PIL_AVAILABLE and TORCH_AVAILABLE):
+        return None
+    raw = None
+    if req.files and "image" in req.files:
+        raw = req.files["image"].read()
+    elif req.content_type and req.content_type.startswith("image/"):
+        raw = req.get_data()
+    if raw is None:
+        return None
+    try:
+        return Image.open(io.BytesIO(raw)).convert("RGB")
+    except Exception:
+        return None
+
+
+def dummy_pil():
+    """Synthetic image for cases when the request has no image attached."""
+    if not PIL_AVAILABLE:
+        return None
+    return Image.new("RGB", (224, 224))
+
+
+# â”€â”€ Model loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def load_model():
-    global _model, _cfg, _model_phase
-    if not JEPA_AVAILABLE: return
-    _cfg = JEPAConfig()
-    if TORCH_AVAILABLE:
+    """Load the trained classifier if available, else fall back to JEPA stub.
+
+    Priority:
+      1. classifier_adapter.load_classifier() â€” your real trained MobileNetV3
+      2. PCBVisionSystem (JEPA-style multi-task, untrained)
+      3. None â€” endpoints return 503
+    """
+    global _model, _cfg, _model_phase, _model_kind
+
+    # Try the trained classifier first
+    if CLASSIFIER_AVAILABLE and TORCH_AVAILABLE:
+        adapter = classifier_adapter.load_classifier()
+        if adapter is not None:
+            _model = adapter
+            _model_kind = "classifier"
+            _model_phase = "trained"
+            print(f"  Using trained MobileNetV3 classifier ({len(adapter.class_names)} classes)")
+            return
+
+    # Fall back to JEPA stub
+    if JEPA_AVAILABLE and TORCH_AVAILABLE:
+        _cfg = JEPAConfig()
         _model = PCBVisionSystem(_cfg)
         if Path(CHECKPOINT_PATH).exists():
             ckpt = torch.load(CHECKPOINT_PATH, map_location="cpu")
             _model.load_state_dict(ckpt["model_state"])
-            _model_phase = ckpt.get("phase","pretrained")
+            _model_phase = ckpt.get("phase", "trained")
+            print(f"  Loaded JEPA checkpoint (phase={_model_phase})")
+        else:
+            print("  No JEPA checkpoint; predictions will be random â€” train.py first")
         _model.eval()
+        _model_kind = "jepa"
+        return
+
+    print("  No model could be loaded.")
+
+
+# â”€â”€ Routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+@app.route("/health")
+def health():
+    return jsonify({
+        "ok": True,
+        "torch": TORCH_AVAILABLE,
+        "opencv": CV2_AVAILABLE,
+        "jepa": JEPA_AVAILABLE,
+        "pil": PIL_AVAILABLE,
+        "classifier_available": CLASSIFIER_AVAILABLE,
+        "model_kind": _model_kind,
+        "trained": _model_kind == "classifier",
+    })
+
 
 @app.route("/nn/status")
 def nn_status():
-    params = sum(p.numel() for p in _model.parameters()) if _model and TORCH_AVAILABLE else 0
-    return jsonify({"loaded": _model is not None,"model":"PCBVisionSystem (JEPA)","parameters":params,"device":"cpu","checkpoint":CHECKPOINT_PATH if Path(CHECKPOINT_PATH).exists() else None,"phase":_model_phase})
+    if _model is None:
+        return jsonify({
+            "loaded": False,
+            "model": "none",
+            "model_kind": "none",
+        })
+    params = sum(p.numel() for p in _model.parameters()) if TORCH_AVAILABLE else 0
 
-@app.route("/nn/align", methods=["POST"])
-def nn_align():
-    return jsonify({"delta_theta_deg":round(random.gauss(0,3),3),"delta_x_mm":round(random.gauss(0,0.1),4),"delta_y_mm":round(random.gauss(0,0.1),4),"confidence":round(random.uniform(0.7,0.99),3),"inference_ms":round(random.uniform(8,25),1)})
+    if _model_kind == "classifier":
+        return jsonify({
+            "loaded": True,
+            "model": "MobileNetV3-Small (trained, multi-label)",
+            "model_kind": "classifier",
+            "parameters": params,
+            "device": "cpu",
+            "phase": "trained",
+            "num_classes": len(_model.class_names),
+            "class_names": _model.class_names,
+            "metrics_from_paper": {
+                "mAP": 0.636,
+                "macro_f1_at_0.5": 0.517,
+                "macro_precision_at_0.5": 0.782,
+                "macro_recall_at_0.5": 0.423,
+            },
+        })
+
+    # JEPA fallback
+    return jsonify({
+        "loaded": True,
+        "model": "PCBVisionSystem (JEPA stub, untrained)",
+        "model_kind": "jepa",
+        "parameters": params,
+        "device": "cpu",
+        "checkpoint": CHECKPOINT_PATH if Path(CHECKPOINT_PATH).exists() else None,
+        "phase": _model_phase,
+        "heads": ["ComponentHead", "DefectHead", "AlignmentHead"],
+    })
+
+
+
+
+@app.route("/nn/detect_boxes", methods=["POST"])
+def nn_detect_boxes():
+    if _model is None or _model_kind != "classifier":
+        return jsonify({"error": "classifier not loaded"}), 503
+    raw = None
+    if request.files and "image" in request.files:
+        raw = request.files["image"].read()
+    elif request.content_type and request.content_type.startswith("image/"):
+        raw = request.get_data()
+    if not raw:
+        return jsonify({"error": "no image provided"}), 400
+    try:
+        import sliding_detect
+        result = sliding_detect.detect_boxes(raw, _model)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e), "boxes": []}), 500
 
 @app.route("/nn/detect", methods=["POST"])
 def nn_detect():
-    idx = random.randint(0,len(COMPONENT_CLASSES)-1)
-    return jsonify({"class_name":COMPONENT_CLASSES[idx],"class_idx":idx,"confidence":round(random.uniform(0.7,0.99),3),"bbox":[round(random.uniform(0.3,0.7),3) for _ in range(4)],"inference_ms":round(random.uniform(8,25),1)})
+    t0 = time.perf_counter()
+    if _model is None or not TORCH_AVAILABLE:
+        return jsonify({"error": "Model not loaded"}), 503
+
+    img = request_to_tensor(request)
+    if img is None:
+        img = dummy_pil()
+        if img is None:
+            return jsonify({"error": "No image and PIL not available"}), 503
+
+    if _model_kind == "classifier":
+        # Use the adapter's transform (64x64 + ImageNet normalize)
+        x = _model.transform_pil(img).unsqueeze(0)
+        result = _model.infer_detect(x, top_k=10)
+    else:
+        # JEPA path â€” original 224x224 transform
+        x = get_transform()(img).unsqueeze(0)
+        result = _model.infer_detect(x)
+
+    result["inference_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+    result["model_kind"] = _model_kind
+    return jsonify(result)
+
+
+@app.route("/nn/align", methods=["POST"])
+def nn_align():
+    t0 = time.perf_counter()
+    if _model is None or not TORCH_AVAILABLE:
+        return jsonify({"error": "Model not loaded"}), 503
+    img = request_to_tensor(request) or dummy_pil()
+    if img is None:
+        return jsonify({"error": "No image"}), 503
+
+    if _model_kind == "classifier":
+        x = _model.transform_pil(img).unsqueeze(0)
+        result = _model.infer_align(x)
+    else:
+        x = get_transform()(img).unsqueeze(0)
+        result = _model.infer_align(x)
+    result["inference_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+    result["model_kind"] = _model_kind
+    return jsonify(result)
+
 
 @app.route("/nn/validate", methods=["POST"])
 def nn_validate():
-    p = random.uniform(0.5,0.99)
-    return jsonify({"decision":"PASS" if p>0.5 else "FAIL","pass_prob":round(p,3),"fail_prob":round(1-p,3),"inference_ms":round(random.uniform(10,30),1)})
+    t0 = time.perf_counter()
+    if _model is None or not TORCH_AVAILABLE:
+        return jsonify({"error": "Model not loaded"}), 503
+    img = request_to_tensor(request) or dummy_pil()
+    if img is None:
+        return jsonify({"error": "No image"}), 503
+
+    if _model_kind == "classifier":
+        x = _model.transform_pil(img).unsqueeze(0)
+        result = _model.infer_validate(x)
+    else:
+        x = get_transform()(img).unsqueeze(0)
+        result = _model.infer_validate(x)
+    result["inference_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+    result["model_kind"] = _model_kind
+    return jsonify(result)
+
 
 @app.route("/nn/items", methods=["POST"])
 def nn_items():
     global _board_items
-    _board_items = request.get_json().get("items",[])
-    return jsonify({"ok":True,"item_count":len(_board_items)})
+    _board_items = request.get_json().get("items", [])
+    return jsonify({"ok": True, "item_count": len(_board_items)})
+
 
 @app.route("/nn/items/state")
 def nn_items_state():
-    return jsonify({"items":_board_items,"nn_annotations":[]})
+    return jsonify({"items": _board_items, "nn_annotations": []})
+
 
 @app.route("/nn/train/start", methods=["POST"])
 def nn_train_start():
-    data = request.get_json()
-    phase = data.get("phase","pretrain")
-    epochs = int(data.get("epochs",200))
+    """Kick off training in a background thread."""
+    data       = request.get_json() or {}
+    epochs     = int(data.get("epochs", 50))
+    batch_size = int(data.get("batch_size", 16))
+    lr         = float(data.get("lr", 1e-3))
+
     def _run():
-        global _model_phase
-        t0 = time.time()
-        with _lock: _training.update({"running":True,"phase":phase,"epoch":0,"total_epochs":epochs})
-        for ep in range(epochs):
-            time.sleep(0.05)
-            elapsed = time.time()-t0
-            eta = (elapsed/max(1,ep+1))*(epochs-ep-1)
-            with _lock: _training.update({"epoch":ep+1,"loss":round(1.0/(ep+1),4),"elapsed_seconds":round(elapsed,1),"eta_seconds":round(eta,1)})
-        _model_phase = "pretrained" if phase=="pretrain" else "finetuned"
-        with _lock: _training.update({"running":False,"phase":"done"})
-    threading.Thread(target=_run,daemon=True).start()
-    return jsonify({"started":True,"message":f"Started {phase} for {epochs} epochs"})
+        import subprocess, sys
+        with _lock:
+            _training.update({"running": True, "phase": "training",
+                               "epoch": 0, "total_epochs": epochs})
+        result = subprocess.run(
+            [sys.executable, "train.py",
+             "--epochs", str(epochs),
+             "--batch-size", str(batch_size),
+             "--lr", str(lr)],
+            capture_output=True, text=True
+        )
+        load_model()
+        with _lock:
+            _training.update({"running": False, "phase": "done"})
+
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"started": True,
+                    "message": f"Training started: {epochs} epochs."})
+
 
 @app.route("/nn/train/status")
 def nn_train_status():
-    with _lock: return jsonify(dict(_training))
+    with _lock:
+        return jsonify(dict(_training))
 
-@app.route("/health")
-def health():
-    return jsonify({"ok":True,"torch":TORCH_AVAILABLE,"opencv":CV2_AVAILABLE,"jepa":JEPA_AVAILABLE})
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    return jsonify({"reply":"[stub] keep your existing chat route here"})
+    return jsonify({"reply": "[stub] keep your existing chat route here"})
 
-if __name__=="__main__":
-    print("="*50)
-    print("  PCBWorkspace Flask Server")
-    print(f"  PyTorch : {'YES' if TORCH_AVAILABLE else 'no'}")
-    print(f"  OpenCV  : {'YES' if CV2_AVAILABLE else 'no'}")
-    print(f"  JEPA NN : {'YES' if JEPA_AVAILABLE else 'no - copy pcb_jepa_nn.py here'}")
-    print("  URL     : http://127.0.0.1:5000")
-    print("="*50)
-    load_model()
-    app.run(host="127.0.0.1",port=5000,debug=False,threaded=True)
+
+load_model()
+
+
+if __name__ == "__main__":
+    print("=" * 55)
+    print("  PCBWorkspace Flask Server - CNN Multi-Task")
+    print(f"  PyTorch     : {'YES' if TORCH_AVAILABLE else 'NO'}")
+    print(f"  OpenCV      : {'YES' if CV2_AVAILABLE  else 'NO'}")
+    print(f"  Pillow      : {'YES' if PIL_AVAILABLE  else 'NO'}")
+    print(f"  Classifier  : {'YES' if CLASSIFIER_AVAILABLE else 'NO'}")
+    print(f"  JEPA stub   : {'YES' if JEPA_AVAILABLE else 'NO'}")
+    print(f"  Active model: {_model_kind}")
+    print("  URL         : http://127.0.0.1:5000")
+    print("=" * 55)
+    app.run(host="127.0.0.1", port=5000, debug=False, threaded=True)

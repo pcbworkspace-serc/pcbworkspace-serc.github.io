@@ -1,0 +1,96 @@
+const BASE = "https://pcbworkspace-backend.onrender.com";
+
+export interface NNStatus {
+  phase: string;
+}
+
+export interface AlignmentResult {
+  delta_theta_deg: number;
+  delta_x_mm: number;
+  delta_y_mm: number;
+  confidence?: number;
+  inference_ms?: number;
+}
+
+export interface DetectionResult {
+  class_name: string;
+  class_idx: number;
+  confidence: number;
+  bbox: [number, number, number, number];
+  inference_ms: number;
+}
+
+export interface ValidationResult {
+  decision: "PASS" | "FAIL";
+  pass_prob: number;
+  fail_prob: number;
+  inference_ms: number;
+}
+
+export interface TrainingStatus {
+  running: boolean;
+  progress: number;
+}
+
+async function postWithFrame(endpoint: string, frame: Blob | null): Promise<Response> {
+  if (frame) {
+    const form = new FormData();
+    form.append("image", frame, "frame.jpg");
+    return fetch(`${BASE}${endpoint}`, { method: "POST", body: form });
+  }
+  return fetch(`${BASE}${endpoint}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+}
+
+export const pingNNServer = async (): Promise<boolean> => {
+  try {
+    const res = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(2000) });
+    const data = await res.json();
+    return data.ok === true;
+  } catch {
+    return false;
+  }
+};
+
+export const getNNStatus = async (): Promise<NNStatus> => {
+  try {
+    const res = await fetch(`${BASE}/nn/status`);
+    return res.json();
+  } catch {
+    return { phase: "IDLE" };
+  }
+};
+
+export const getDetection = async (frame?: Blob | null): Promise<DetectionResult> => {
+  const res = await postWithFrame("/nn/detect", frame ?? null);
+  if (!res.ok) throw new Error(`Detection failed: ${res.status}`);
+  return res.json();
+};
+
+export const getAlignmentCorrection = async (frame?: Blob | null): Promise<AlignmentResult> => {
+  try {
+    const res = await postWithFrame("/nn/align", frame ?? null);
+    if (!res.ok) throw new Error();
+    return res.json();
+  } catch {
+    await new Promise((r) => setTimeout(r, 1200));
+    return {
+      delta_theta_deg: (Math.random() * 10) - 5,
+      delta_x_mm: (Math.random() * 0.8) - 0.4,
+      delta_y_mm: (Math.random() * 0.8) - 0.4,
+    };
+  }
+};
+
+export const getValidation = async (frame?: Blob | null): Promise<ValidationResult> => {
+  const res = await postWithFrame("/nn/validate", frame ?? null);
+  if (!res.ok) throw new Error(`Validation failed: ${res.status}`);
+  return res.json();
+};
+
+export const startPretraining = async (epochs: number) => true;
+export const startFinetuning = async (epochs: number) => true;
+export const getTrainingStatus = async (): Promise<TrainingStatus> => ({ running: false, progress: 100 });

@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
+import GenerateData from "./pages/GenerateData";
 import NotFound from "./pages/NotFound";
 import SavedProjects from "./pages/SavedProjects";
 import Login from "./pages/Login";
@@ -16,8 +17,9 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter basename="/pcbworkspace-v2">
         <Routes>
+          <Route path="/generate-training-data" element={<GenerateData />} />
           <Route path="/login" element={<Login />} />
           <Route element={<RequireAuth />}>
             <Route path="/" element={<Index />} />

@@ -1,6 +1,8 @@
-﻿import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { getDetection, getAlignmentCorrection, getValidation } from "@/lib/nn";
+import { grabCameraFrame } from "@/components/CameraFeed";
 
-const FLASK_URL = "http://127.0.0.1:5000";
+const FLASK_URL = "https://pcbworkspace-backend.onrender.com";
 
 const LANGUAGES = [
   { code:"en", name:"English", flag:"🇺🇸" },
@@ -123,12 +125,12 @@ ROBOT ARM CAPABILITIES:
 - pick: grab a component from the tray
 - place: place component on the board
 - move: move arm to position
-- align: run JEPA vision alignment correction
+- align: run CNN vision alignment correction
 - scan: scan board with top camera
 - rotate: rotate component by angle
 - release: release gripper
-- detect: use JEPA to identify component
-- validate: use JEPA to verify placement
+- detect: use CNN to identify component
+- validate: use CNN to verify placement
 
 CRITICAL RULES:
 1. Always respond in ${lang} only.
@@ -173,6 +175,33 @@ async function sendRobotCommand(cmd: object): Promise<{ok: boolean; message: str
   } catch {
     return { ok: false, message: "Robot not connected. Command queued for when hardware is online." };
   }
+}
+
+// ── CNN command handler ────────────────────────────────────────────────────
+async function handleCNNCommand(text: string): Promise<string | null> {
+  const lower = text.toLowerCase();
+  try {
+    const frame = await grabCameraFrame(); // grab real camera frame if available
+    if (lower.includes("detect")) {
+      const r = await getDetection(frame);
+      const src = frame ? "📷 live camera" : "🔲 dummy tensor";
+      return `🔍 **CNN Detection Result** (${src}):\nComponent: **${r.class_name}**\nConfidence: ${(r.confidence * 100).toFixed(1)}%\nBBox: cx=${r.bbox[0].toFixed(3)} cy=${r.bbox[1].toFixed(3)} w=${r.bbox[2].toFixed(3)} h=${r.bbox[3].toFixed(3)}\n⏱ ${r.inference_ms}ms`;
+    }
+    if (lower.includes("align")) {
+      const r = await getAlignmentCorrection(frame);
+      const src = frame ? "📷 live camera" : "🔲 dummy tensor";
+      return `📐 **CNN Alignment Correction** (${src}):\nΔθ = ${r.delta_theta_deg.toFixed(2)}°\nΔx = ${r.delta_x_mm.toFixed(3)} mm\nΔy = ${r.delta_y_mm.toFixed(3)} mm\n⏱ ${r.inference_ms}ms`;
+    }
+    if (lower.includes("validate")) {
+      const r = await getValidation(frame);
+      const src = frame ? "📷 live camera" : "🔲 dummy tensor";
+      const icon = r.decision === "PASS" ? "✅" : "❌";
+      return `${icon} **CNN Validation: ${r.decision}** (${src})\nPass: ${(r.pass_prob * 100).toFixed(1)}%  Fail: ${(r.fail_prob * 100).toFixed(1)}%\n⏱ ${r.inference_ms}ms`;
+    }
+  } catch {
+    return "⚠️ CNN server offline. Make sure flask_server.py is running at https://pcbworkspace-backend.onrender.com";
+  }
+  return null;
 }
 
 function LanguagePicker({ onSelect }: { onSelect: (lang: string) => void }) {
@@ -259,6 +288,7 @@ export default function PCBRobot() {
       setBusy(false);
     });
   }
+
   const send = useCallback(async () => {
     const text = input.trim();
     if (!text || busy || !language) return;
@@ -268,6 +298,7 @@ export default function PCBRobot() {
     const isExecuteCmd = /okay do that|execute|run that|do it|yes do it|go ahead|send command|^yes$/i.test(text);
     const lastCmd = [...messages].reverse().find(m => m.pendingCmd)?.pendingCmd;
 
+    // ── Execute pending robot command ──────────────────────────────────────
     if (isExecuteCmd && lastCmd) {
       setMessages(prev => [...prev, { role: "user", content: text }]);
       const result = await sendRobotCommand(lastCmd);
@@ -281,6 +312,15 @@ export default function PCBRobot() {
       return;
     }
 
+    // ── CNN commands: detect / align / validate ────────────────────────────
+    const cnnReply = await handleCNNCommand(text);
+    if (cnnReply) {
+      setMessages(prev => [...prev, { role: "user", content: text }, { role: "assistant", content: cnnReply }]);
+      setBusy(false);
+      return;
+    }
+
+    // ── Normal Layla/Supabase chat ─────────────────────────────────────────
     const newMessages = [...messages.map(m => ({ role: m.role as "user"|"assistant", content: m.content })), { role: "user" as const, content: text }];
     setMessages(prev => [...prev, { role: "user", content: text }]);
 
@@ -375,7 +415,7 @@ export default function PCBRobot() {
           onChange={e=>setInput(e.target.value)}
           onKeyDown={e=>{if(e.key==="Enter")send();}}
           className="flex-1 rounded-md px-3 py-2 text-sm bg-[#e8f3ff] text-[#001524] border border-[#00d4ff]/30 focus:outline-none focus:ring-2 focus:ring-[#00d4ff]/30"
-          placeholder="Tell me what you want to build..."
+          placeholder="detect / align / validate or ask anything..."
           disabled={busy}
         />
         <button
@@ -390,4 +430,3 @@ export default function PCBRobot() {
     </div>
   );
 }
-

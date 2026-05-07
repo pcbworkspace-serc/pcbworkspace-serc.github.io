@@ -1,4 +1,4 @@
-﻿import sys, time, threading, random
+import os, sys, time, threading, random
 from pathlib import Path
 from flask import Flask, request, jsonify
 try:
@@ -45,6 +45,10 @@ def load_model():
             _model.load_state_dict(ckpt["model_state"])
             _model_phase = ckpt.get("phase","pretrained")
         _model.eval()
+
+@app.route("/", methods=["GET", "HEAD"])
+def index():
+    return "OK", 200
 
 @app.route("/nn/status")
 def nn_status():
@@ -107,12 +111,13 @@ def chat():
     return jsonify({"reply":"[stub] keep your existing chat route here"})
 
 if __name__=="__main__":
+    port = int(os.environ.get("PORT", 5000))
     print("="*50)
     print("  PCBWorkspace Flask Server")
     print(f"  PyTorch : {'YES' if TORCH_AVAILABLE else 'no'}")
     print(f"  OpenCV  : {'YES' if CV2_AVAILABLE else 'no'}")
     print(f"  JEPA NN : {'YES' if JEPA_AVAILABLE else 'no - copy pcb_jepa_nn.py here'}")
-    print("  URL     : http://127.0.0.1:5000")
+    print(f"  URL     : http://0.0.0.0:{port}")
     print("="*50)
     load_model()
-    app.run(host="127.0.0.1",port=5000,debug=False,threaded=True)
+    app.run(host="0.0.0.0",port=port,debug=False,threaded=True)

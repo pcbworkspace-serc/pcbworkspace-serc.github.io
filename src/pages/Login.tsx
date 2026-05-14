@@ -30,6 +30,7 @@ export default function Login() {
       <div className="relative w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-sm">
         <div className="pointer-events-none absolute -top-20 right-0">
           <img src={`${import.meta.env.BASE_URL}serc-robot-transparent.png`} alt="SERC Robot" className="h-40 w-40 object-contain" />
+	</div>
         <h1 className="text-2xl font-bold text-foreground">Mini MEE Login</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Sign in with your SERC email and password.

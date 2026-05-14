@@ -17,7 +17,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter basename="/pcbworkspace-v2">
+      <BrowserRouter basename="/">
         <Routes>
           <Route path="/generate-training-data" element={<GenerateData />} />
           <Route path="/login" element={<Login />} />

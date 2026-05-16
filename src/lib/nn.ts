@@ -70,10 +70,48 @@ export interface TrainingStatus {
   progress: number;
 }
 
+// Max edge of uploaded images. The backend resizes to 640px for inference anyway,
+// so anything larger is wasted bandwidth + processing time on the free Render tier.
+const UPLOAD_MAX_SIDE = 800;
+const UPLOAD_JPEG_QUALITY = 0.85;
+
+/**
+ * Resize a blob image down to UPLOAD_MAX_SIDE on the longer edge.
+ * Returns the original blob if it's already small enough or if anything fails.
+ */
+async function resizeBlobImage(blob: Blob, maxSide: number = UPLOAD_MAX_SIDE): Promise<Blob> {
+  try {
+    // createImageBitmap is faster than the new Image() approach and avoids DOM
+    const bitmap = await createImageBitmap(blob);
+    try {
+      const longSide = Math.max(bitmap.width, bitmap.height);
+      if (longSide <= maxSide) return blob;
+      const scale = maxSide / longSide;
+      const w = Math.round(bitmap.width * scale);
+      const h = Math.round(bitmap.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return blob;
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      const resized = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((b) => resolve(b), "image/jpeg", UPLOAD_JPEG_QUALITY),
+      );
+      return resized || blob;
+    } finally {
+      bitmap.close?.();
+    }
+  } catch {
+    return blob;
+  }
+}
+
 async function postWithFrame(endpoint: string, frame: Blob | null): Promise<Response> {
   if (frame) {
+    const resized = await resizeBlobImage(frame);
     const form = new FormData();
-    form.append("image", frame, "frame.jpg");
+    form.append("image", resized, "frame.jpg");
     return fetch(BASE + endpoint, { method: "POST", body: form });
   }
   return fetch(BASE + endpoint, {
@@ -90,6 +128,14 @@ export const pingNNServer = async (): Promise<boolean> => {
     return data.ok === true;
   } catch {
     return false;
+  }
+};
+
+export const wakeBackend = async (): Promise<void> => {
+  try {
+    await fetch(BASE + "/health", { signal: AbortSignal.timeout(60000) });
+  } catch {
+    /* best-effort; ignore */
   }
 };
 
@@ -161,31 +207,14 @@ export const startFinetuning = async (_epochs: number) => true;
 export const getTrainingStatus = async (): Promise<TrainingStatus> => ({ running: false, progress: 100 });
 
 export const COMPONENT_FULL_NAMES: Record<string, string> = {
-  R: "Resistor",
-  RN: "Resistor Network",
-  RA: "Resistor Array",
-  C: "Capacitor",
-  L: "Inductor",
-  D: "Diode",
-  LED: "LED",
-  Q: "Transistor",
-  QA: "Transistor Array",
-  U: "Integrated Circuit",
-  IC: "Integrated Circuit",
-  T: "Transformer",
-  F: "Fuse",
-  FB: "Ferrite Bead",
-  SW: "Switch",
-  BTN: "Button",
-  CR: "Crystal",
-  CRA: "Crystal Array",
-  J: "Connector",
-  JP: "Jumper",
-  M: "Module",
-  P: "Plug",
-  S: "Sensor",
-  TP: "Test Point",
-  V: "Voltage Regulator",
+  R: "Resistor", RN: "Resistor Network", RA: "Resistor Array",
+  C: "Capacitor", L: "Inductor", D: "Diode", LED: "LED",
+  Q: "Transistor", QA: "Transistor Array",
+  U: "Integrated Circuit", IC: "Integrated Circuit",
+  T: "Transformer", F: "Fuse", FB: "Ferrite Bead",
+  SW: "Switch", BTN: "Button", CR: "Crystal", CRA: "Crystal Array",
+  J: "Connector", JP: "Jumper", M: "Module", P: "Plug",
+  S: "Sensor", TP: "Test Point", V: "Voltage Regulator",
 };
 
 export function decodeComponent(code: string): string {
@@ -198,7 +227,6 @@ export interface DetectionBox {
   class: string;
   class_full: string;
   score: number;
-  // Present only on YOLO hybrid results — let DetectModal show the breakdown:
   yolo_score?: number;
   classifier_score?: number;
 }

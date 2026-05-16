@@ -8,14 +8,15 @@ import SavedFiles from "@/components/SavedFiles";
 import JEPADemo from "@/components/JEPADemo";
 import NNPanel from "@/components/NNPanel";
 import DetectModal from "@/components/DetectModal";
-import { getMultiLabelDetection, getDetectBoxesByMethod, type ClassPrediction, type DetectionBox, type DetectionMethod } from "@/lib/nn";
+import Minimap2D from "@/components/Minimap2D";
+import { getMultiLabelDetection, getDetectBoxesByMethod, wakeBackend, type ClassPrediction, type DetectionBox, type DetectionMethod } from "@/lib/nn";
 import { grabCameraFrame } from "@/components/CameraFeed";
 import { captureScene } from "@/components/PCBWorkspace";
 import { detectCircuitBlocks, type CircuitBlock } from "@/lib/circuits";
 import { type Wire, type PinRef, type NetAnalysis, analyzeNets, makeWireId } from "@/lib/wires";
 import { getPins } from "@/lib/pins";
 import PCBRobot from "@/components/PCBRobot";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { clearSession, getCurrentUserEmail, getRecentsKey, getSavedProjectsKey } from "@/lib/auth";
 
@@ -25,6 +26,16 @@ type SavedProject = { id: string; name: string; lastOpened: number; snapshot?: {
 
 const MAX_RECENTS = 6;
 const MAX_SAVED_PROJECTS = 20;
+
+// Physical PCB dimensions the workspace represents.
+// Default = 62 × 42 mm, matching the JEPA demo description.
+// If/when you want a calibration UI, expose these as state.
+const PCB_PHYSICAL_MM = { width: 62, height: 42 };
+
+// Conversion factor: how many millimeters per 1 unit of scene/board-item coordinate.
+// If your 3D scene already uses mm directly, leave at 1.0. Calibrate against
+// the real robot once you measure the actual XY scale on the bench.
+const SCENE_MM_PER_UNIT = 1.0;
 
 function getSavedProjectsKey2(email: string) { return `pcbworkspace.savedProjects.v2:${email.trim().toLowerCase()}`; }
 function getRecentsKey2(email: string) { return `pcbworkspace.recentFiles.v2:${email.trim().toLowerCase()}`; }
@@ -46,6 +57,39 @@ function parseBoardItems(value: unknown): BoardItem[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item: any) => item?.type && typeof item.x==="number" && typeof item.y==="number");
 }
+
+// Convert a board item's scene-coord position to physical mm on the PCB.
+// Assumes (0,0) in scene coords = center of PCB; positive X right, positive Y up.
+function itemToMm(item: BoardItem) {
+  return {
+    x_mm: +(item.x * SCENE_MM_PER_UNIT + PCB_PHYSICAL_MM.width / 2).toFixed(3),
+    y_mm: +(item.y * SCENE_MM_PER_UNIT + PCB_PHYSICAL_MM.height / 2).toFixed(3),
+  };
+}
+
+const Icon = {
+  Save: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+      <polyline points="17 21 17 13 7 13 7 21"/>
+      <polyline points="7 3 7 8 15 8"/>
+    </svg>
+  ),
+  Import: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+  ),
+  Export: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="17 8 12 3 7 8"/>
+      <line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
+  ),
+};
 
 const Index = () => {
   const [boardItems, setBoardItems] = useState<BoardItem[]>([]);
@@ -77,6 +121,9 @@ const Index = () => {
   const [showRobot, setShowRobot] = useState(true);
   const navigate = useNavigate();
 
+  // Wake Render in the background so first detection isn't a cold start
+  useEffect(() => { wakeBackend(); }, []);
+
   // Detect modal state
   const [detectOpen, setDetectOpen] = useState(false);
   const [detectLoading, setDetectLoading] = useState(false);
@@ -98,7 +145,6 @@ const Index = () => {
     mlMethodError?: string | null;
   } | null>(null);
 
-  // Hold the last detection input so "Detect Again" with a different method can reuse it
   const lastDetectionRef = useRef<{ frame: Blob | null; source: string; imageUrl: string | null }>({
     frame: null, source: "", imageUrl: null,
   });
@@ -138,7 +184,7 @@ const Index = () => {
         mlMethod = (bx.method as DetectionMethod) ?? method;
       } catch (e) {
         mlMethodError = e instanceof Error ? e.message : 'Box detection failed';
-        mlMethod = method;  // record what we tried
+        mlMethod = method;
       }
     }
     setDetectResult({
@@ -176,6 +222,52 @@ const Index = () => {
       runDetection();
     }
   };
+
+  // SCARA-style placement job for the physical robot.
+  const handleExportRobotJob = () => {
+    if (boardItems.length === 0) {
+      alert("Place at least one component before exporting a robot job.");
+      return;
+    }
+    // Assign sequential IDs per component type: R1, R2, C1, ...
+    const counters: Record<string, number> = {};
+    const componentExport = boardItems.map((item, idx) => {
+      counters[item.type] = (counters[item.type] || 0) + 1;
+      const prefix = item.type[0] ?? "X";
+      const id = `${prefix}${counters[item.type]}`;
+      const { x_mm, y_mm } = itemToMm(item);
+      return {
+        id,
+        type: item.type,
+        x_mm,
+        y_mm,
+        rotation_deg: 0,
+        pickup_order: idx + 1,
+      };
+    });
+    // Map wires (pin-to-pin) to nets (component-to-component) for traceability
+    const nets = wires.map((w) => ({
+      id: w.id,
+      from: { component_id: componentExport[w.fromComponent]?.id ?? null, pin: w.fromPin },
+      to:   { component_id: componentExport[w.toComponent]?.id ?? null, pin: w.toPin },
+    }));
+    const job = {
+      schemaVersion: 1,
+      machineType: "scara",
+      units: "mm",
+      generatedAt: new Date().toISOString(),
+      pcb: {
+        width_mm: PCB_PHYSICAL_MM.width,
+        height_mm: PCB_PHYSICAL_MM.height,
+        origin: "bottom_left",
+        note: `Conversion factor: ${SCENE_MM_PER_UNIT} mm/scene-unit. Calibrate against your bench before running.`,
+      },
+      components: componentExport,
+      nets,
+    };
+    downloadJson(`pcb-robot-job-${Date.now()}.json`, job);
+  };
+
   const email = getCurrentUserEmail() ?? "";
 
   const handleSaveProject = () => {
@@ -218,16 +310,34 @@ const Index = () => {
     downloadJson(`pcbworkspace-backup-${Date.now()}.json`,{exportedAt:new Date().toISOString(),schemaVersion:1,savedProjects:loadSavedProjects(email),recentFiles:loadRecents(email)});
   };
 
+  const iconBtn = "h-7 w-7 flex items-center justify-center rounded border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-colors";
+
   return (
     <div className="h-screen w-screen flex overflow-hidden relative bg-black">
       {showDemo && <JEPADemo onClose={() => setShowDemo(false)} />}
 
       {/* Top nav bar */}
-      <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-end gap-2 px-4 py-2 bg-black/60 border-b border-white/5">
+      <div className="absolute top-0 left-0 right-0 z-50 flex items-center gap-2 px-4 py-2 bg-black/60 border-b border-white/5">
+        <button type="button" onClick={handleSaveProject} className={iconBtn} title="Save Project">
+          <Icon.Save />
+        </button>
+        <button type="button" onClick={handleImport} className={iconBtn} title="Import a project JSON">
+          <Icon.Import />
+        </button>
+        <button type="button" onClick={handleExport} className={iconBtn} title="Export all projects backup">
+          <Icon.Export />
+        </button>
+        <SavedFiles onOpenProject={(projectId) => {
+          const project = loadSavedProjects(email).find(p => p.id === projectId);
+          if (project?.snapshot?.boardItems) setBoardItems(parseBoardItems(project.snapshot.boardItems));
+        }} />
+
+        <div className="flex-1" />
+
         <span className="text-xs font-semibold text-white mr-2">{email}</span>
         <button type="button" onClick={() => navigate("/login", { replace: true })} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Switch Account</button>
         <button type="button" onClick={() => { clearSession(); navigate("/login", { replace: true }); }} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Logout</button>
-       <a href="https://spaceroboticscreations.com/" target="_blank" rel="noopener noreferrer" className="text-[#00d4ff] text-xs font-bold opacity-70 hover:opacity-100 transition-opacity">SERC ↗</a>
+        <a href="https://spaceroboticscreations.com/" target="_blank" rel="noopener noreferrer" className="text-[#00d4ff] text-xs font-bold opacity-70 hover:opacity-100 transition-opacity">SERC ↗</a>
         <button type="button" onClick={() => setShowRobot(v => !v)} className="text-xs rounded-full border border-[#00d4ff]/60 px-3 py-1 text-[#00d4ff] hover:bg-[#00d4ff]/10 transition-colors font-semibold flex items-center gap-1.5">{showRobot ? "Hide Layla" : "Ask Layla"}</button>
       </div>
 
@@ -265,26 +375,26 @@ const Index = () => {
             <div className="text-center py-1.5 border-b border-primary/20">
               <span className="text-primary font-black text-[11px] tracking-widest uppercase">PCB Workspace</span>
             </div>
-            <div className="flex-1">
+            <div className="flex-1 relative">
               <PCBWorkspace items={boardItems} onItemsChange={setBoardItems} wires={wires} wireMode={wireMode} pendingPin={pendingPin} onPinClick={handlePinClick} />
+              <Minimap2D
+                items={boardItems}
+                wires={wires}
+                pcbWidthMm={PCB_PHYSICAL_MM.width}
+                pcbHeightMm={PCB_PHYSICAL_MM.height}
+                onExport={handleExportRobotJob}
+              />
             </div>
           </div>
         </div>
 
-        {/* Bottom action bar — compacted */}
+        {/* Bottom action bar */}
         <div className="flex gap-2 px-3 pb-3 justify-end items-center">
-          <SavedFiles onOpenProject={(projectId) => {
-            const project = loadSavedProjects(email).find(p => p.id === projectId);
-            if (project?.snapshot?.boardItems) setBoardItems(parseBoardItems(project.snapshot.boardItems));
-          }} />
           <button type="button" onClick={() => { setWireMode(!wireMode); setPendingPin(null); }} className={`h-10 px-4 rounded-md border transition-colors text-[11px] font-semibold ${wireMode ? "border-amber-400 bg-amber-400/20 text-amber-300" : "border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary"}`}>{wireMode ? "Wire: ON" : "Wire Mode"}</button>
           <button type="button" onClick={runDetection} className="h-10 px-4 rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 transition-colors text-[11px] font-semibold text-primary">Detect</button>
           <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) runDetectionOnFile(f); e.target.value = ""; }} />
           <SampleDropdown onPickSample={runDetectionOnFile} />
           <button type="button" onClick={() => fileInputRef.current?.click()} className="h-10 px-4 rounded-md border border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/20 transition-colors text-[11px] font-semibold text-amber-400">Upload PCB</button>
-          <button type="button" onClick={handleExport} className="h-10 px-4 rounded-md border border-white/25 bg-white/5 hover:bg-white/10 transition-colors text-[11px] font-semibold text-white/90">Export</button>
-          <button type="button" onClick={handleImport} className="h-10 px-4 rounded-md border border-white/25 bg-white/5 hover:bg-white/10 transition-colors text-[11px] font-semibold text-white/90">Import</button>
-          <button type="button" onClick={handleSaveProject} className="h-10 px-4 rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 transition-colors text-[11px] font-semibold text-primary">Save Project</button>
         </div>
       </div>
 

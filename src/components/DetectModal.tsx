@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { decodeComponent, type ClassPrediction, type DetectionBox } from "@/lib/nn";
+import { decodeComponent, type ClassPrediction, type DetectionBox, type DetectionMethod } from "@/lib/nn";
 
 interface CircuitBlock {
   name: string;
@@ -29,7 +29,7 @@ interface DetectResult {
   mlImageUrl?: string | null;
   mlBoxes?: DetectionBox[] | null;
   mlImageSize?: [number, number] | null;
-  mlMethod?: "sliding_window" | "yolo_hybrid" | null;
+  mlMethod?: DetectionMethod | null;
   mlMethodError?: string | null;
 }
 
@@ -38,6 +38,8 @@ interface DetectModalProps {
   onClose: () => void;
   onDetectAgain: () => void;
   loading: boolean;
+  currentMethod: DetectionMethod;
+  onChangeMethod: (m: DetectionMethod) => void;
 }
 
 const COMPONENT_LETTER: Record<string, string> = {
@@ -114,7 +116,29 @@ function ImageWithBoxes({ url, boxes, imageSize }: {
   );
 }
 
-export default function DetectModal({ result, onClose, onDetectAgain, loading }: DetectModalProps) {
+/** Live elapsed-time display so users know the request is still in flight (not hung). */
+function ElapsedTimer() {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  let hint = "Detecting components...";
+  if (seconds > 15) hint = "Still working — backend may be waking up from sleep.";
+  if (seconds > 45) hint = "Cold start can take up to a minute. Hang in there.";
+  return (
+    <div className="py-10 text-center">
+      <div className="inline-block w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <p className="mt-4 text-sm text-foreground">{hint}</p>
+      <p className="mt-1 text-xs font-mono text-muted-foreground">{seconds}s elapsed</p>
+    </div>
+  );
+}
+
+export default function DetectModal({
+  result, onClose, onDetectAgain, loading,
+  currentMethod, onChangeMethod,
+}: DetectModalProps) {
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onEsc);
@@ -124,6 +148,7 @@ export default function DetectModal({ result, onClose, onDetectAgain, loading }:
   if (!result && !loading) return null;
 
   const hasBoxes = result?.mlBoxes && result.mlBoxes.length > 0;
+  const noBoxes = !loading && result && !hasBoxes && !result.mlMethodError && result.mlImageUrl;
 
   return (
     <div
@@ -144,21 +169,38 @@ export default function DetectModal({ result, onClose, onDetectAgain, loading }:
         </button>
 
         <h2 className="text-2xl font-bold text-primary mb-1">PCB Detection</h2>
+
+        {/* Method picker — moved here from the toolbar */}
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Method:</span>
+          <div className="flex items-stretch rounded-md border border-primary/30 overflow-hidden text-[10px] font-bold uppercase tracking-wider">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => onChangeMethod("yolo_hybrid")}
+              className={`px-3 py-1 transition-colors ${currentMethod === "yolo_hybrid" ? "bg-primary/30 text-primary" : "bg-transparent text-primary/50 hover:bg-primary/10"} disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              YOLO + Classifier
+            </button>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => onChangeMethod("sliding_window")}
+              className={`px-3 py-1 transition-colors border-l border-primary/30 ${currentMethod === "sliding_window" ? "bg-primary/30 text-primary" : "bg-transparent text-primary/50 hover:bg-primary/10"} disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              Sliding Window
+            </button>
+          </div>
+          {result?.mlInferenceMs != null && (
+            <span className="ml-auto text-[10px] font-mono text-muted-foreground">{result.mlInferenceMs.toFixed(0)} ms</span>
+          )}
+        </div>
+
         <p className="text-xs text-muted-foreground mb-5">
           {result?.mlModel ?? "Layla Vision · CNN backend"}
-          {result?.mlMethod && (
-            <span className="ml-2 px-1.5 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-bold uppercase tracking-wider">
-              {result.mlMethod === "yolo_hybrid" ? "YOLO + Classifier" : "Sliding Window"}
-            </span>
-          )}
         </p>
 
-        {loading && (
-          <div className="py-8 text-center">
-            <div className="inline-block w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-            <p className="mt-3 text-sm text-muted-foreground">Running detection...</p>
-          </div>
-        )}
+        {loading && <ElapsedTimer />}
 
         {!loading && result && (
           <>
@@ -188,14 +230,25 @@ export default function DetectModal({ result, onClose, onDetectAgain, loading }:
               </div>
             )}
 
+            {/* Empty state — no boxes found */}
+            {noBoxes && (
+              <div className="mb-5 px-3 py-3 rounded-md bg-blue-500/10 border border-blue-500/30 text-[12px] text-blue-300">
+                <p className="font-bold mb-1">No components detected.</p>
+                <p className="text-blue-300/70">
+                  Try the other detection method, or upload a clearer image of a PCB.
+                  This model was trained on the FPIC dataset — close-ups of green PCBs with surface-mount parts work best.
+                </p>
+              </div>
+            )}
+
             {hasBoxes && (
               <div className="mb-5">
                 {result.mlBoxes && result.mlBoxes.length > 0 && Math.max(...result.mlBoxes.map(b => b.score)) < 0.5 && (
-              <div className="mb-3 px-3 py-2 rounded-md bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300">
-                <span className="font-bold">!</span> Low-confidence detections. Image may be out-of-distribution from FPIC training data.
-              </div>
-            )}
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  <div className="mb-3 px-3 py-2 rounded-md bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300">
+                    <span className="font-bold">!</span> Low-confidence detections. Image may be out-of-distribution from FPIC training data.
+                  </div>
+                )}
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                   Box Predictions
                 </h3>
                 <div className="space-y-1 max-h-[180px] overflow-y-auto">
@@ -246,12 +299,6 @@ export default function DetectModal({ result, onClose, onDetectAgain, loading }:
                       </div>
                     );
                   })}
-                </div>
-                <div className="flex justify-between mt-2 text-[10px] text-muted-foreground">
-                  <span>MobileNetV3-Small · multi-label · paper mAP 0.636</span>
-                  {result.mlInferenceMs != null && (
-                    <span className="font-mono">{result.mlInferenceMs.toFixed(0)} ms</span>
-                  )}
                 </div>
               </div>
             )}

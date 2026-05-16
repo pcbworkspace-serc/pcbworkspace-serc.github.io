@@ -98,9 +98,15 @@ const Index = () => {
     mlMethodError?: string | null;
   } | null>(null);
 
+  // Hold the last detection input so "Detect Again" with a different method can reuse it
+  const lastDetectionRef = useRef<{ frame: Blob | null; source: string; imageUrl: string | null }>({
+    frame: null, source: "", imageUrl: null,
+  });
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const runDetectionWith = async (frame: Blob | null, source: string, imageUrl: string | null) => {
+  const runDetectionWith = async (frame: Blob | null, source: string, imageUrl: string | null, method: DetectionMethod) => {
+    lastDetectionRef.current = { frame, source, imageUrl };
     setDetectOpen(true);
     setDetectLoading(true);
     setDetectResult(null);
@@ -126,12 +132,13 @@ const Index = () => {
     let mlMethodError: string | null = null;
     if (frame) {
       try {
-        const bx = await getDetectBoxesByMethod(frame, detectMethod);
+        const bx = await getDetectBoxesByMethod(frame, method);
         mlBoxes = bx.boxes;
         mlImageSize = bx.image_size;
-        mlMethod = (bx.method as DetectionMethod) ?? detectMethod;
+        mlMethod = (bx.method as DetectionMethod) ?? method;
       } catch (e) {
         mlMethodError = e instanceof Error ? e.message : 'Box detection failed';
+        mlMethod = method;  // record what we tried
       }
     }
     setDetectResult({
@@ -152,12 +159,22 @@ const Index = () => {
       try { frame = await captureScene(); if (frame) source = '3D scene'; } catch {}
     }
     const url = frame ? URL.createObjectURL(frame) : null;
-    await runDetectionWith(frame, source, url);
+    await runDetectionWith(frame, source, url, detectMethod);
   };
 
   const runDetectionOnFile = async (file: File) => {
     const url = URL.createObjectURL(file);
-    await runDetectionWith(file, 'uploaded image', url);
+    await runDetectionWith(file, 'uploaded image', url, detectMethod);
+  };
+
+  const rerunWithMethod = (method: DetectionMethod) => {
+    setDetectMethod(method);
+    const last = lastDetectionRef.current;
+    if (last.frame) {
+      runDetectionWith(last.frame, last.source, last.imageUrl, method);
+    } else {
+      runDetection();
+    }
   };
   const email = getCurrentUserEmail() ?? "";
 
@@ -216,7 +233,6 @@ const Index = () => {
 
       {/* Left sidebar blue */}
       <div className="w-[230px] shrink-0 flex flex-col gap-3 p-3 pt-12" style={{background:"linear-gradient(to bottom, hsl(195,100%,50%), hsl(210,100%,40%))"}}>
-        {/* Logo larger robot, thinner font */}
         <div className="flex items-center gap-2 mt-1">
           <img src={`${import.meta.env.BASE_URL}serc-robot-transparent.png`} alt="SERC Robot" className="h-28 w-28 object-contain drop-shadow-lg" />
           <div>
@@ -228,7 +244,6 @@ const Index = () => {
         <div className="flex flex-col gap-3 flex-1 overflow-y-auto">
           <div className="relative"><CameraFeed /><CalibrateButton /></div>
 
-          {/* JEPA Vision box */}
           <div className="bg-black/20 rounded-xl p-3 border border-black/10">
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-black font-black text-[10px] uppercase tracking-widest">JEPA Vision</h3>
@@ -241,8 +256,6 @@ const Index = () => {
           <Inventory />
           <RobotPanel />
         </div>
-
-
       </div>
 
       {/* Center  PCB board */}
@@ -258,30 +271,14 @@ const Index = () => {
           </div>
         </div>
 
-        {/* Bottom buttons  Export, Import, Save, Saved Files */}
+        {/* Bottom action bar — compacted */}
         <div className="flex gap-2 px-3 pb-3 justify-end items-center">
           <SavedFiles onOpenProject={(projectId) => {
             const project = loadSavedProjects(email).find(p => p.id === projectId);
             if (project?.snapshot?.boardItems) setBoardItems(parseBoardItems(project.snapshot.boardItems));
           }} />
-                    <button type="button" onClick={() => { setWireMode(!wireMode); setPendingPin(null); }} className={`h-10 px-4 rounded-md border transition-colors text-[11px] font-semibold ${wireMode ? "border-amber-400 bg-amber-400/20 text-amber-300" : "border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary"}`}>{wireMode ? "Wire: ON" : "Wire Mode"}</button>
-                    <div className="h-10 flex items-stretch rounded-md border border-primary/30 overflow-hidden text-[10px] font-bold uppercase tracking-wider" title="Detection method">
-                      <button
-                        type="button"
-                        onClick={() => setDetectMethod("yolo_hybrid")}
-                        className={`px-3 transition-colors ${detectMethod === "yolo_hybrid" ? "bg-primary/30 text-primary" : "bg-transparent text-primary/50 hover:bg-primary/10"}`}
-                      >
-                        YOLO
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDetectMethod("sliding_window")}
-                        className={`px-3 transition-colors border-l border-primary/30 ${detectMethod === "sliding_window" ? "bg-primary/30 text-primary" : "bg-transparent text-primary/50 hover:bg-primary/10"}`}
-                      >
-                        Sliding
-                      </button>
-                    </div>
-                    <button type="button" onClick={runDetection} className="h-10 px-4 rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 transition-colors text-[11px] font-semibold text-primary">Detect</button>
+          <button type="button" onClick={() => { setWireMode(!wireMode); setPendingPin(null); }} className={`h-10 px-4 rounded-md border transition-colors text-[11px] font-semibold ${wireMode ? "border-amber-400 bg-amber-400/20 text-amber-300" : "border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary"}`}>{wireMode ? "Wire: ON" : "Wire Mode"}</button>
+          <button type="button" onClick={runDetection} className="h-10 px-4 rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 transition-colors text-[11px] font-semibold text-primary">Detect</button>
           <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) runDetectionOnFile(f); e.target.value = ""; }} />
           <SampleDropdown onPickSample={runDetectionOnFile} />
           <button type="button" onClick={() => fileInputRef.current?.click()} className="h-10 px-4 rounded-md border border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/20 transition-colors text-[11px] font-semibold text-amber-400">Upload PCB</button>
@@ -303,6 +300,8 @@ const Index = () => {
           loading={detectLoading}
           onClose={() => setDetectOpen(false)}
           onDetectAgain={runDetection}
+          currentMethod={detectMethod}
+          onChangeMethod={rerunWithMethod}
         />
       )}
     </div>

@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { decodeComponent, type ClassPrediction, type DetectionBox } from "@/lib/nn";
 
 interface CircuitBlock {
@@ -29,6 +29,8 @@ interface DetectResult {
   mlImageUrl?: string | null;
   mlBoxes?: DetectionBox[] | null;
   mlImageSize?: [number, number] | null;
+  mlMethod?: "sliding_window" | "yolo_hybrid" | null;
+  mlMethodError?: string | null;
 }
 
 interface DetectModalProps {
@@ -52,7 +54,6 @@ function scoreColor(score: number): string {
   return "#6b7280";
 }
 
-// Distinct color per class for box outlines
 const BOX_COLORS = [
   "#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#a855f7",
   "#06b6d4", "#ec4899", "#eab308", "#84cc16", "#f97316",
@@ -144,13 +145,18 @@ export default function DetectModal({ result, onClose, onDetectAgain, loading }:
 
         <h2 className="text-2xl font-bold text-primary mb-1">PCB Detection</h2>
         <p className="text-xs text-muted-foreground mb-5">
-          {result?.mlModel ?? "Layla Vision \u00b7 CNN backend"}
+          {result?.mlModel ?? "Layla Vision · CNN backend"}
+          {result?.mlMethod && (
+            <span className="ml-2 px-1.5 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-bold uppercase tracking-wider">
+              {result.mlMethod === "yolo_hybrid" ? "YOLO + Classifier" : "Sliding Window"}
+            </span>
+          )}
         </p>
 
         {loading && (
           <div className="py-8 text-center">
             <div className="inline-block w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-            <p className="mt-3 text-sm text-muted-foreground">Running sliding-window detection...</p>
+            <p className="mt-3 text-sm text-muted-foreground">Running detection...</p>
           </div>
         )}
 
@@ -198,6 +204,11 @@ export default function DetectModal({ result, onClose, onDetectAgain, loading }:
                       <div className="w-3 h-3 rounded" style={{ backgroundColor: colorForClass(b.class) }} />
                       <span className="font-bold text-foreground">{b.class}</span>
                       <span className="text-muted-foreground">{b.class_full}</span>
+                      {(b as any).yolo_score !== undefined && (
+                        <span className="text-[9px] text-muted-foreground/70 font-mono ml-1">
+                          yolo {((b as any).yolo_score * 100).toFixed(0)}% · cls {((b as any).classifier_score * 100).toFixed(0)}%
+                        </span>
+                      )}
                       <span className="ml-auto font-mono" style={{ color: scoreColor(b.score) }}>
                         {(b.score * 100).toFixed(0)}%
                       </span>
@@ -237,7 +248,7 @@ export default function DetectModal({ result, onClose, onDetectAgain, loading }:
                   })}
                 </div>
                 <div className="flex justify-between mt-2 text-[10px] text-muted-foreground">
-                  <span>MobileNetV3-Small \u00b7 multi-label \u00b7 paper mAP 0.636</span>
+                  <span>MobileNetV3-Small · multi-label · paper mAP 0.636</span>
                   {result.mlInferenceMs != null && (
                     <span className="font-mono">{result.mlInferenceMs.toFixed(0)} ms</span>
                   )}
@@ -287,6 +298,15 @@ export default function DetectModal({ result, onClose, onDetectAgain, loading }:
                   ML Status
                 </h3>
                 <p className="text-sm text-amber-500/80">{result.mlError}</p>
+              </div>
+            )}
+
+            {result.mlMethodError && (
+              <div className="mb-5">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  Box Detection Status
+                </h3>
+                <p className="text-sm text-amber-500/80">{result.mlMethodError}</p>
               </div>
             )}
           </>

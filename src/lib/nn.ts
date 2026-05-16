@@ -1,4 +1,7 @@
-﻿const BASE = (import.meta.env.VITE_NN_URL as string | undefined) || "http://localhost:5000";
+
+const BASE = (import.meta.env.VITE_NN_URL as string | undefined) || "http://localhost:5000";
+
+export type DetectionMethod = "sliding_window" | "yolo_hybrid";
 
 export interface NNStatus {
   phase: string;
@@ -13,6 +16,10 @@ export interface NNStatus {
     "macro_f1_at_0.5": number;
     "macro_precision_at_0.5": number;
     "macro_recall_at_0.5": number;
+  };
+  methods?: {
+    sliding_window?: { endpoint: string; available: boolean; description: string };
+    yolo_hybrid?: { endpoint: string; available: boolean; description: string };
   };
 }
 
@@ -191,6 +198,9 @@ export interface DetectionBox {
   class: string;
   class_full: string;
   score: number;
+  // Present only on YOLO hybrid results — let DetectModal show the breakdown:
+  yolo_score?: number;
+  classifier_score?: number;
 }
 
 export interface DetectBoxesResult {
@@ -198,6 +208,8 @@ export interface DetectBoxesResult {
   image_size: [number, number];
   work_size?: [number, number];
   n_windows_evaluated?: number;
+  n_proposals?: number;
+  method?: DetectionMethod;
   model: string;
   inference_ms: number;
 }
@@ -206,4 +218,17 @@ export const getDetectBoxes = async (frame: Blob | null): Promise<DetectBoxesRes
   const res = await postWithFrame('/nn/detect_boxes', frame);
   if (!res.ok) throw new Error('detect_boxes failed: ' + res.status);
   return res.json();
+};
+
+export const getDetectBoxesYolo = async (frame: Blob | null): Promise<DetectBoxesResult> => {
+  const res = await postWithFrame('/nn/detect_boxes_yolo', frame);
+  if (!res.ok) throw new Error('detect_boxes_yolo failed: ' + res.status);
+  return res.json();
+};
+
+export const getDetectBoxesByMethod = (
+  frame: Blob | null,
+  method: DetectionMethod,
+): Promise<DetectBoxesResult> => {
+  return method === "yolo_hybrid" ? getDetectBoxesYolo(frame) : getDetectBoxes(frame);
 };

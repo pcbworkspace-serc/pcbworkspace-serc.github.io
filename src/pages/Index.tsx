@@ -1,4 +1,4 @@
-﻿import PCBWorkspace from "@/components/PCBWorkspace";
+import PCBWorkspace from "@/components/PCBWorkspace";
 import Inventory from "@/components/Inventory";
 import CameraFeed from "@/components/CameraFeed";
 import RobotPanel from "@/components/RobotPanel";
@@ -8,7 +8,7 @@ import SavedFiles from "@/components/SavedFiles";
 import JEPADemo from "@/components/JEPADemo";
 import NNPanel from "@/components/NNPanel";
 import DetectModal from "@/components/DetectModal";
-import { getMultiLabelDetection, getDetectBoxes, type ClassPrediction, type DetectionBox } from "@/lib/nn";
+import { getMultiLabelDetection, getDetectBoxesByMethod, type ClassPrediction, type DetectionBox, type DetectionMethod } from "@/lib/nn";
 import { grabCameraFrame } from "@/components/CameraFeed";
 import { captureScene } from "@/components/PCBWorkspace";
 import { detectCircuitBlocks, type CircuitBlock } from "@/lib/circuits";
@@ -72,6 +72,7 @@ const Index = () => {
     setWires((prev) => [...prev, newWire]);
     setPendingPin(null);
   };
+  const [detectMethod, setDetectMethod] = useState<DetectionMethod>("yolo_hybrid");
   const [showDemo, setShowDemo] = useState(false);
   const [showRobot, setShowRobot] = useState(true);
   const navigate = useNavigate();
@@ -90,6 +91,11 @@ const Index = () => {
     mlModel: string | null;
     mlInferenceMs: number | null;
     mlSource: string | null;
+    mlImageUrl?: string | null;
+    mlBoxes?: DetectionBox[] | null;
+    mlImageSize?: [number, number] | null;
+    mlMethod?: DetectionMethod | null;
+    mlMethodError?: string | null;
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -116,18 +122,24 @@ const Index = () => {
     }
     let mlBoxes: DetectionBox[] | null = null;
     let mlImageSize: [number, number] | null = null;
+    let mlMethod: DetectionMethod | null = null;
+    let mlMethodError: string | null = null;
     if (frame) {
       try {
-        const bx = await getDetectBoxes(frame);
+        const bx = await getDetectBoxesByMethod(frame, detectMethod);
         mlBoxes = bx.boxes;
         mlImageSize = bx.image_size;
-      } catch {}
+        mlMethod = (bx.method as DetectionMethod) ?? detectMethod;
+      } catch (e) {
+        mlMethodError = e instanceof Error ? e.message : 'Box detection failed';
+      }
     }
     setDetectResult({
       groundTruth, circuits, nets: null,
       mlClass: null, mlConfidence: null, mlError,
       mlPredictions, mlModel, mlInferenceMs,
       mlSource: source, mlImageUrl: imageUrl, mlBoxes, mlImageSize,
+      mlMethod, mlMethodError,
     });
     setDetectLoading(false);
   };
@@ -253,6 +265,22 @@ const Index = () => {
             if (project?.snapshot?.boardItems) setBoardItems(parseBoardItems(project.snapshot.boardItems));
           }} />
                     <button type="button" onClick={() => { setWireMode(!wireMode); setPendingPin(null); }} className={`h-10 px-4 rounded-md border transition-colors text-[11px] font-semibold ${wireMode ? "border-amber-400 bg-amber-400/20 text-amber-300" : "border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary"}`}>{wireMode ? "Wire: ON" : "Wire Mode"}</button>
+                    <div className="h-10 flex items-stretch rounded-md border border-primary/30 overflow-hidden text-[10px] font-bold uppercase tracking-wider" title="Detection method">
+                      <button
+                        type="button"
+                        onClick={() => setDetectMethod("yolo_hybrid")}
+                        className={`px-3 transition-colors ${detectMethod === "yolo_hybrid" ? "bg-primary/30 text-primary" : "bg-transparent text-primary/50 hover:bg-primary/10"}`}
+                      >
+                        YOLO
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDetectMethod("sliding_window")}
+                        className={`px-3 transition-colors border-l border-primary/30 ${detectMethod === "sliding_window" ? "bg-primary/30 text-primary" : "bg-transparent text-primary/50 hover:bg-primary/10"}`}
+                      >
+                        Sliding
+                      </button>
+                    </div>
                     <button type="button" onClick={runDetection} className="h-10 px-4 rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 transition-colors text-[11px] font-semibold text-primary">Detect</button>
           <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) runDetectionOnFile(f); e.target.value = ""; }} />
           <SampleDropdown onPickSample={runDetectionOnFile} />

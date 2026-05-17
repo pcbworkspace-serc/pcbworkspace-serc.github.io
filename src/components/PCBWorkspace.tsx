@@ -1,47 +1,56 @@
-﻿import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Grid } from "@react-three/drei";
 import * as THREE from "three";
 import { useState, useCallback, useEffect } from "react";
-import { useRobotPlacement } from "@/hooks/useRobotPlacement";
-import { getPins } from "@/lib/pins";
-import type { Wire, PinRef } from "@/lib/wires";
 
 interface DroppedItem {
   type: string;
   x: number;
   y: number;
+  rotation_deg?: number;
+}
+
+// PinRef + Wire match @/lib/wires shapes used by Index.tsx
+interface PinRef { componentIndex: number; pinName: string }
+interface Wire {
+  id: string;
+  fromComponent: number; fromPin: string;
+  toComponent: number;   toPin: string;
 }
 
 type PCBWorkspaceProps = {
   items?: DroppedItem[];
   onItemsChange?: (items: DroppedItem[]) => void;
+  // Sprint 2 will use these — Index.tsx passes them already.
   wires?: Wire[];
   wireMode?: boolean;
   pendingPin?: PinRef | null;
   onPinClick?: (ref: PinRef) => void;
 };
 
-/* â”€â”€ Realistic Components â”€â”€ */
+// ── captureScene support ──────────────────────────────────────────────────────
+// The Detect button in Index.tsx calls captureScene() to grab a JPEG of the 3D
+// canvas when no webcam frame is available. We stash a module-level reference to
+// the underlying canvas element on mount so external callers can read it.
+let _activeCanvas: HTMLCanvasElement | null = null;
 
-function Resistor({ position }: { position: [number, number, number] }) {
+export async function captureScene(): Promise<Blob | null> {
+  const canvas = _activeCanvas;
+  if (!canvas) return null;
+  return new Promise((resolve) => {
+    canvas.toBlob((b) => resolve(b), "image/jpeg", 0.9);
+  });
+}
+
+/* ── Realistic Components ───────────────────────────────────────────────────── */
+
+function Resistor() {
   return (
-    <group position={position}>
-      {/* Body */}
+    <group>
       <mesh position={[0, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.08, 0.08, 0.35, 16]} />
         <meshStandardMaterial color="#d2b48c" roughness={0.6} />
       </mesh>
-      {/* Color bands */}
-      {[[-0.1, "#8B4513"], [-0.04, "#000000"], [0.02, "#ff0000"], [0.08, "#FFD700"]].map(
-        ([offset, color], i) => (
-          <mesh key={i} position={[0, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.085, 0.085, 0.025, 16]} />
-            <meshStandardMaterial color={color as string} />
-            <group position={[0, Number(offset), 0]} />
-          </mesh>
-        )
-      )}
-      {/* Actually position the bands correctly */}
       {[
         { offset: -0.12, color: "#8B4513" },
         { offset: -0.05, color: "#000000" },
@@ -53,7 +62,6 @@ function Resistor({ position }: { position: [number, number, number] }) {
           <meshStandardMaterial color={band.color} />
         </mesh>
       ))}
-      {/* Lead wires */}
       <mesh position={[-0.25, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.012, 0.012, 0.18, 8]} />
         <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
@@ -66,25 +74,21 @@ function Resistor({ position }: { position: [number, number, number] }) {
   );
 }
 
-function Capacitor({ position }: { position: [number, number, number] }) {
+function Capacitor() {
   return (
-    <group position={position}>
-      {/* Electrolytic capacitor body */}
+    <group>
       <mesh position={[0, 0.18, 0]}>
         <cylinderGeometry args={[0.12, 0.12, 0.3, 20]} />
         <meshStandardMaterial color="#1a1a6e" roughness={0.4} />
       </mesh>
-      {/* Top cap */}
       <mesh position={[0, 0.34, 0]}>
         <cylinderGeometry args={[0.12, 0.11, 0.02, 20]} />
         <meshStandardMaterial color="#888888" metalness={0.8} roughness={0.2} />
       </mesh>
-      {/* K marking stripe */}
       <mesh position={[0.08, 0.18, 0.08]} rotation={[0, -Math.PI / 4, 0]}>
         <boxGeometry args={[0.01, 0.28, 0.1]} />
         <meshStandardMaterial color="#cccccc" />
       </mesh>
-      {/* Lead wires */}
       <mesh position={[-0.04, 0.01, 0]}>
         <cylinderGeometry args={[0.012, 0.012, 0.08, 8]} />
         <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
@@ -97,20 +101,17 @@ function Capacitor({ position }: { position: [number, number, number] }) {
   );
 }
 
-function Diode({ position }: { position: [number, number, number] }) {
+function Diode() {
   return (
-    <group position={position}>
-      {/* Glass body */}
+    <group>
       <mesh position={[0, 0.1, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.05, 0.05, 0.25, 12]} />
         <meshStandardMaterial color="#2a2a2a" roughness={0.3} />
       </mesh>
-      {/* Cathode band */}
       <mesh position={[0.08, 0.1, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.055, 0.055, 0.03, 12]} />
         <meshStandardMaterial color="#C0C0C0" metalness={0.7} roughness={0.3} />
       </mesh>
-      {/* Leads */}
       <mesh position={[-0.2, 0.1, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.012, 0.012, 0.18, 8]} />
         <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
@@ -123,25 +124,21 @@ function Diode({ position }: { position: [number, number, number] }) {
   );
 }
 
-function LED({ position }: { position: [number, number, number] }) {
+function LED() {
   return (
-    <group position={position}>
-      {/* Dome */}
+    <group>
       <mesh position={[0, 0.22, 0]}>
         <sphereGeometry args={[0.1, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
         <meshStandardMaterial color="#ff2200" transparent opacity={0.7} emissive="#ff2200" emissiveIntensity={0.5} />
       </mesh>
-      {/* Cylinder base */}
       <mesh position={[0, 0.13, 0]}>
         <cylinderGeometry args={[0.1, 0.1, 0.18, 16]} />
         <meshStandardMaterial color="#ff3300" transparent opacity={0.6} emissive="#ff2200" emissiveIntensity={0.3} />
       </mesh>
-      {/* Flat bottom rim */}
       <mesh position={[0, 0.04, 0]}>
         <cylinderGeometry args={[0.12, 0.12, 0.02, 16]} />
         <meshStandardMaterial color="#cccccc" metalness={0.6} roughness={0.3} />
       </mesh>
-      {/* Leads */}
       <mesh position={[-0.03, 0.01, 0]}>
         <cylinderGeometry args={[0.01, 0.01, 0.08, 8]} />
         <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
@@ -150,17 +147,15 @@ function LED({ position }: { position: [number, number, number] }) {
         <cylinderGeometry args={[0.01, 0.01, 0.06, 8]} />
         <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
       </mesh>
-      {/* Point light for glow */}
       <pointLight position={[0, 0.3, 0]} color="#ff2200" intensity={0.3} distance={1} />
     </group>
   );
 }
 
-function Transistor({ position }: { position: [number, number, number] }) {
+function Transistor() {
   return (
-    <group position={position}>
-      {/* Flat body (TO-92 package) */}
-      <mesh position={[0, 0.12, 0]} rotation={[0, 0, 0]}>
+    <group>
+      <mesh position={[0, 0.12, 0]}>
         <cylinderGeometry args={[0.1, 0.1, 0.18, 16, 1, false, 0, Math.PI]} />
         <meshStandardMaterial color="#1a1a1a" roughness={0.3} />
       </mesh>
@@ -168,12 +163,10 @@ function Transistor({ position }: { position: [number, number, number] }) {
         <boxGeometry args={[0.2, 0.18, 0.02]} />
         <meshStandardMaterial color="#1a1a1a" roughness={0.3} />
       </mesh>
-      {/* Marking text dot */}
       <mesh position={[0, 0.18, 0.06]}>
         <sphereGeometry args={[0.015, 8, 8]} />
         <meshStandardMaterial color="#ffffff" />
       </mesh>
-      {/* 3 Leads */}
       {[-0.05, 0, 0.05].map((xOff, i) => (
         <mesh key={i} position={[xOff, 0.01, 0]}>
           <cylinderGeometry args={[0.01, 0.01, 0.06, 8]} />
@@ -184,20 +177,12 @@ function Transistor({ position }: { position: [number, number, number] }) {
   );
 }
 
-/* â”€â”€ Detailed PCB Board â”€â”€ */
+/* ── Detailed PCB Board ─────────────────────────────────────────────────────── */
 
 function PCBBoard() {
-  // Generate random-looking but deterministic trace paths
   const traces: { x: number; z: number; w: number; h: number }[] = [];
-  // Horizontal main bus traces
-  for (let i = 0; i < 7; i++) {
-    traces.push({ x: 0, z: -1.4 + i * 0.48, w: 5.6, h: 0.04 });
-  }
-  // Vertical main bus traces
-  for (let i = 0; i < 11; i++) {
-    traces.push({ x: -2.5 + i * 0.5, z: 0, w: 0.04, h: 3.6 });
-  }
-  // Diagonal / branching traces
+  for (let i = 0; i < 7; i++) traces.push({ x: 0, z: -1.4 + i * 0.48, w: 5.6, h: 0.04 });
+  for (let i = 0; i < 11; i++) traces.push({ x: -2.5 + i * 0.5, z: 0, w: 0.04, h: 3.6 });
   const branchTraces = [
     { x: -1.8, z: -0.6, w: 0.8, h: 0.03 },
     { x: 1.2, z: 0.8, w: 1.2, h: 0.03 },
@@ -208,16 +193,10 @@ function PCBBoard() {
     { x: 0.3, z: 0.6, w: 0.03, h: 0.5 },
     { x: -1.0, z: -1.0, w: 0.03, h: 0.6 },
   ];
-
-  // Via positions
   const vias: [number, number][] = [];
   for (let row = 0; row < 7; row++) {
-    for (let col = 0; col < 11; col++) {
-      vias.push([-2.5 + col * 0.5, -1.4 + row * 0.48]);
-    }
+    for (let col = 0; col < 11; col++) vias.push([-2.5 + col * 0.5, -1.4 + row * 0.48]);
   }
-
-  // Extra via clusters
   const extraVias: [number, number][] = [
     [-1.8, -0.6], [1.2, 0.8], [-0.5, 1.2], [2.0, -1.0],
     [-2.0, 0.5], [1.5, -0.3], [0.3, 0.6], [-1.0, -1.0],
@@ -226,55 +205,42 @@ function PCBBoard() {
 
   return (
     <group>
-      {/* FR-4 substrate base */}
       <mesh position={[0, -0.08, 0]} receiveShadow>
         <boxGeometry args={[6.2, 0.06, 4.2]} />
         <meshStandardMaterial color="#0d4f25" roughness={0.7} />
       </mesh>
-      {/* Solder mask layer (green top) */}
       <mesh position={[0, -0.04, 0]} receiveShadow>
         <boxGeometry args={[6.2, 0.02, 4.2]} />
         <meshStandardMaterial color="#1a8a4a" roughness={0.5} />
       </mesh>
-      {/* Copper ground plane (bottom hint) */}
       <mesh position={[0, -0.11, 0]}>
         <boxGeometry args={[6.0, 0.005, 4.0]} />
         <meshStandardMaterial color="#b87333" metalness={0.8} roughness={0.3} />
       </mesh>
-
-      {/* Main copper traces */}
       {traces.map((t, i) => (
         <mesh key={`trace-${i}`} position={[t.x, -0.028, t.z]}>
           <boxGeometry args={[t.w, 0.005, t.h]} />
           <meshStandardMaterial color="#c87533" metalness={0.85} roughness={0.2} />
         </mesh>
       ))}
-
-      {/* Branch traces */}
       {branchTraces.map((t, i) => (
         <mesh key={`branch-${i}`} position={[t.x, -0.028, t.z]}>
           <boxGeometry args={[t.w, 0.005, t.h]} />
           <meshStandardMaterial color="#d4944a" metalness={0.8} roughness={0.25} />
         </mesh>
       ))}
-
-      {/* Through-hole vias at grid intersections */}
       {vias.map(([vx, vz], i) => (
         <group key={`via-${i}`}>
-          {/* Copper pad */}
           <mesh position={[vx, -0.025, vz]}>
             <cylinderGeometry args={[0.06, 0.06, 0.008, 12]} />
             <meshStandardMaterial color="#d4a84b" metalness={0.9} roughness={0.15} />
           </mesh>
-          {/* Drill hole */}
           <mesh position={[vx, -0.02, vz]}>
             <cylinderGeometry args={[0.025, 0.025, 0.01, 8]} />
             <meshStandardMaterial color="#0a3318" />
           </mesh>
         </group>
       ))}
-
-      {/* Extra vias for detail */}
       {extraVias.map(([vx, vz], i) => (
         <group key={`evia-${i}`}>
           <mesh position={[vx, -0.025, vz]}>
@@ -287,13 +253,10 @@ function PCBBoard() {
           </mesh>
         </group>
       ))}
-
-      {/* Silkscreen outlines */}
       <lineSegments position={[0, -0.018, 0]}>
         <edgesGeometry args={[new THREE.BoxGeometry(6.2, 0.001, 4.2)]} />
         <lineBasicMaterial color="#ffffff" />
       </lineSegments>
-      {/* Silkscreen component outlines */}
       {[
         [-1.5, 0.5, 0.5, 0.3],
         [1.0, -0.5, 0.4, 0.6],
@@ -306,11 +269,7 @@ function PCBBoard() {
           <lineBasicMaterial color="rgba(255,255,255,0.5)" />
         </lineSegments>
       ))}
-
-      {/* Mounting holes in corners */}
-      {[
-        [-2.8, -1.8], [-2.8, 1.8], [2.8, -1.8], [2.8, 1.8]
-      ].map(([mx, mz], i) => (
+      {[[-2.8, -1.8], [-2.8, 1.8], [2.8, -1.8], [2.8, 1.8]].map(([mx, mz], i) => (
         <group key={`mount-${i}`}>
           <mesh position={[mx, -0.025, mz]}>
             <cylinderGeometry args={[0.12, 0.12, 0.01, 16]} />
@@ -326,135 +285,27 @@ function PCBBoard() {
   );
 }
 
+/* ── Component selector ─────────────────────────────────────────────────────── */
 
-/* â”€â”€ Component Selector â”€â”€ */
-
-function PCBComponent({ position, label }: { position: [number, number, number]; label: string }) {
+function PCBComponent({ label }: { label: string }) {
   switch (label) {
-    case "Resistor": return <Resistor position={position} />;
-    case "Capacitor": return <Capacitor position={position} />;
-    case "Diode": return <Diode position={position} />;
-    case "LED": return <LED position={position} />;
-    case "Transistor": return <Transistor position={position} />;
-    default: return null;
+    case "Resistor":   return <Resistor />;
+    case "Capacitor":  return <Capacitor />;
+    case "Diode":      return <Diode />;
+    case "LED":        return <LED />;
+    case "Transistor": return <Transistor />;
+    default:           return null;
   }
 }
 
-/* â”€â”€ Pin Marker â”€â”€ */
+/* ── Main Workspace ─────────────────────────────────────────────────────────── */
 
-function PinMarker({
-  position,
-  highlighted,
-  visible,
-  onClick,
-}: {
-  position: [number, number, number];
-  highlighted: boolean;
-  visible: boolean;
-  onClick: () => void;
-}) {
-  if (!visible) return null;
-  return (
-    <mesh
-      position={position}
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
-      onPointerOut={() => { document.body.style.cursor = "default"; }}
-    >
-      <sphereGeometry args={[0.04, 12, 12]} />
-      <meshStandardMaterial
-        color={highlighted ? "#fbbf24" : "#3aa8ff"}
-        emissive={highlighted ? "#fbbf24" : "#1a4dbf"}
-        emissiveIntensity={highlighted ? 0.8 : 0.4}
-      />
-    </mesh>
-  );
-}
-
-/* â”€â”€ Wire Segment â”€â”€ */
-
-function WireSegment({ from, to }: { from: [number, number, number]; to: [number, number, number] }) {
-  // L-shape routing on the board surface (KiCad-like)
-  // The wire travels from the start pin, drops to the board, routes in two
-  // orthogonal segments (X then Z) at board level, then climbs back up to the end pin.
-  const Y_BOARD = -0.018;        // just above the solder mask
-  const Y_FROM = from[1];
-  const Y_TO   = to[1];
-
-  const cornerX = to[0];
-  const cornerZ = from[2];
-
-  // Helper to render a single cylinder between two points
-  const seg = (a: [number, number, number], b: [number, number, number], key: string) => {
-    const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
-    const length = Math.sqrt(dx*dx + dy*dy + dz*dz);
-    if (length < 0.001) return null;
-    const mid: [number, number, number] = [(a[0]+b[0])/2, (a[1]+b[1])/2, (a[2]+b[2])/2];
-    const dir = new THREE.Vector3(dx, dy, dz).normalize();
-    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-    const e = new THREE.Euler().setFromQuaternion(q);
-    return (
-      <mesh key={key} position={mid} rotation={[e.x, e.y, e.z]}>
-        <cylinderGeometry args={[0.012, 0.012, length, 8]} />
-        <meshStandardMaterial color="#d4a84b" emissive="#fbbf24" emissiveIntensity={0.2} metalness={0.85} roughness={0.25} />
-      </mesh>
-    );
-  };
-
-  const fromPoint: [number, number, number] = [from[0], Y_FROM, from[2]];
-  const fromDrop: [number, number, number] = [from[0], Y_BOARD, from[2]];
-  const corner:   [number, number, number] = [cornerX, Y_BOARD, cornerZ];
-  const toDrop:   [number, number, number] = [to[0], Y_BOARD, to[2]];
-  const toPoint:  [number, number, number] = [to[0], Y_TO, to[2]];
-
-  return (
-    <group>
-      {/* Lead from pin down to board */}
-      {seg(fromPoint, fromDrop, "lead-from")}
-      {/* Horizontal segment along X to corner */}
-      {seg(fromDrop, corner, "x-leg")}
-      {/* Horizontal segment along Z to target column */}
-      {seg(corner, toDrop, "z-leg")}
-      {/* Lead from board up to pin */}
-      {seg(toDrop, toPoint, "lead-to")}
-      {/* Via marker at the corner */}
-      <mesh position={[cornerX, Y_BOARD, cornerZ]}>
-        <cylinderGeometry args={[0.025, 0.025, 0.008, 12]} />
-        <meshStandardMaterial color="#d4a84b" metalness={0.9} roughness={0.15} />
-      </mesh>
-    </group>
-  );
-}
-
-/* â”€â”€ Main Workspace â”€â”€ */
-
-// Captures the current 3D scene render as a JPEG Blob. Registered globally
-// so Index.tsx's runDetection can grab a frame on demand. Has to be inside
-// <Canvas> to access gl via useThree.
-let _sceneCaptureFn: (() => Promise<Blob | null>) | null = null;
-export function captureScene(): Promise<Blob | null> {
-  return _sceneCaptureFn ? _sceneCaptureFn() : Promise.resolve(null);
-}
-function SceneCapturer() {
-  const { gl, scene, camera } = useThree();
-  _sceneCaptureFn = () => new Promise((resolve) => {
-    try {
-      gl.render(scene, camera);
-      gl.domElement.toBlob((blob) => resolve(blob), "image/jpeg", 0.85);
-    } catch { resolve(null); }
-  });
-  return null;
-}
-
-export default function PCBWorkspace({ items, onItemsChange, wires = [], wireMode = false, pendingPin = null, onPinClick }: PCBWorkspaceProps) {
+export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps) {
   const [droppedItems, setDroppedItems] = useState<DroppedItem[]>(items ?? []);
-  const placeOnRobot = useRobotPlacement();
 
-  useEffect(() => {
-    if (items) {
-      setDroppedItems(items);
-    }
-  }, [items]);
+  // Sync from controlled prop. The parent (Index.tsx) is the source of truth —
+  // when it rotates / deletes an item, that flows back here via this effect.
+  useEffect(() => { if (items) setDroppedItems(items); }, [items]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -463,9 +314,8 @@ export default function PCBWorkspace({ items, onItemsChange, wires = [], wireMod
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 6 - 3;
     const y = ((e.clientY - rect.top) / rect.height) * -4 + 2;
-    placeOnRobot(x, y, type);
     setDroppedItems((prev) => {
-      const updated = [...prev, { type, x, y }];
+      const updated = [...prev, { type, x, y, rotation_deg: 0 }];
       onItemsChange?.(updated);
       return updated;
     });
@@ -477,7 +327,13 @@ export default function PCBWorkspace({ items, onItemsChange, wires = [], wireMod
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
     >
-      <Canvas camera={{ position: [4, 5, 4], fov: 50 }} shadows>$([Environment]::NewLine)        <SceneCapturer />
+      <Canvas
+        camera={{ position: [4, 5, 4], fov: 50 }}
+        shadows
+        // preserveDrawingBuffer keeps the rendered frame so captureScene() can read it
+        gl={{ preserveDrawingBuffer: true }}
+        onCreated={({ gl }) => { _activeCanvas = gl.domElement; }}
+      >
         <ambientLight intensity={0.5} />
         <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow />
         <directionalLight position={[-3, 4, -2]} intensity={0.3} />
@@ -495,48 +351,19 @@ export default function PCBWorkspace({ items, onItemsChange, wires = [], wireMod
           followCamera={false}
           position={[0, -0.12, 0]}
         />
-        {droppedItems.map((item, i) => (
-          <PCBComponent
-            key={i}
-            position={[item.x, -0.03, item.y]}
-            label={item.type}
-          />
-        ))}
-        {/* Pin markers (visible during wire mode) */}
-        {droppedItems.map((item, ci) =>
-          getPins(item.type).map((pin) => {
-            const worldPos: [number, number, number] = [
-              item.x + pin.position[0],
-              -0.03 + pin.position[1],
-              item.y + pin.position[2],
-            ];
-            const isPending = pendingPin?.componentIndex === ci && pendingPin?.pinName === pin.name;
-            return (
-              <PinMarker
-                key={`pin-${ci}-${pin.name}`}
-                position={worldPos}
-                highlighted={isPending}
-                visible={wireMode}
-                onClick={() => onPinClick?.({ componentIndex: ci, pinName: pin.name })}
-              />
-            );
-          })
-        )}
-        {/* Wires */}
-        {wires.map((w) => {
-          const fromItem = droppedItems[w.fromComponent];
-          const toItem = droppedItems[w.toComponent];
-          if (!fromItem || !toItem) return null;
-          const fromPin = getPins(fromItem.type).find(p => p.name === w.fromPin);
-          const toPin = getPins(toItem.type).find(p => p.name === w.toPin);
-          if (!fromPin || !toPin) return null;
-          const fromPos: [number, number, number] = [
-            fromItem.x + fromPin.position[0], -0.03 + fromPin.position[1], fromItem.y + fromPin.position[2]
-          ];
-          const toPos: [number, number, number] = [
-            toItem.x + toPin.position[0], -0.03 + toPin.position[1], toItem.y + toPin.position[2]
-          ];
-          return <WireSegment key={w.id} from={fromPos} to={toPos} />;
+        {/* Each component lives in a rotation group so the rotate button in the
+            minimap rotates the actual 3D model around its own Y axis. */}
+        {droppedItems.map((item, i) => {
+          const rotRad = ((item.rotation_deg ?? 0) * Math.PI) / 180;
+          return (
+            <group
+              key={i}
+              position={[item.x, -0.03, item.y]}
+              rotation={[0, rotRad, 0]}
+            >
+              <PCBComponent label={item.type} />
+            </group>
+          );
         })}
         <OrbitControls
           enablePan

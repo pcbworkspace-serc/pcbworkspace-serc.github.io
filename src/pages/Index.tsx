@@ -19,20 +19,20 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { clearSession, getCurrentUserEmail, getRecentsKey, getSavedProjectsKey } from "@/lib/auth";
 
-type BoardItem = { type: string; x: number; y: number };
+// rotation_deg is optional so old saved projects still load fine.
+type BoardItem = { type: string; x: number; y: number; rotation_deg?: number };
 type RecentFile = { name: string; openedAt: number };
 type SavedProject = { id: string; name: string; lastOpened: number; snapshot?: { schemaVersion?: number; savedAt: string; note: string; projectId: string; projectName: string; recentFiles: RecentFile[]; boardItems?: BoardItem[]; }; };
 
 const MAX_RECENTS = 6;
 const MAX_SAVED_PROJECTS = 20;
 
-// Physical PCB dimensions the workspace represents (62×42mm per the JEPA demo).
+// Physical PCB dimensions the workspace represents.
 const PCB_PHYSICAL_MM = { width: 62, height: 42 };
 
-// Conversion factor: how many millimeters per 1 unit of scene/board-item coordinate.
-// Default 1.0 assumes scene coords are already in mm centered at the PCB origin.
-// Adjust this once you've measured the actual scale on the bench against the robot.
-const SCENE_MM_PER_UNIT = 1.0;
+// CORRECTED: your 3D scene PCBBoard is 6.2 units wide representing 62mm,
+// 4.2 units deep representing 42mm. So 1 scene unit = 10mm.
+const SCENE_MM_PER_UNIT = 10.0;
 
 function getSavedProjectsKey2(email: string) { return `pcbworkspace.savedProjects.v2:${email.trim().toLowerCase()}`; }
 function getRecentsKey2(email: string) { return `pcbworkspace.recentFiles.v2:${email.trim().toLowerCase()}`; }
@@ -55,8 +55,6 @@ function parseBoardItems(value: unknown): BoardItem[] {
   return value.filter((item: any) => item?.type && typeof item.x==="number" && typeof item.y==="number");
 }
 
-// Convert a board item's scene-coord position to physical mm on the PCB.
-// Scene origin = PCB center. Output origin = bottom-left of the PCB.
 function itemToMm(item: BoardItem) {
   return {
     x_mm: +(item.x * SCENE_MM_PER_UNIT + PCB_PHYSICAL_MM.width / 2).toFixed(3),
@@ -102,7 +100,7 @@ const Index = () => {
     const newWire: Wire = {
       id: makeWireId(),
       fromComponent: pendingPin.componentIndex, fromPin: pendingPin.pinName,
-      toComponent: ref.componentIndex,         toPin: ref.pinName,
+      toComponent: ref.componentIndex, toPin: ref.pinName,
     };
     setWires((prev) => [...prev, newWire]);
     setPendingPin(null);
@@ -111,10 +109,33 @@ const Index = () => {
   const [showDemo, setShowDemo] = useState(false);
   const navigate = useNavigate();
 
-  // Wake Render in the background on mount so first detection isn't a cold start
   useEffect(() => { wakeBackend(); }, []);
 
-  // Detect modal state
+  // ─── Sprint 1: rotation + delete handlers ─────────────────────────────────────
+  const handleRotateComponent = (index: number) => {
+    setBoardItems((prev) =>
+      prev.map((item, i) =>
+        i === index
+          ? { ...item, rotation_deg: (((item.rotation_deg ?? 0) + 90) % 360) }
+          : item,
+      ),
+    );
+  };
+
+  const handleDeleteComponent = (index: number) => {
+    setWires((prev) =>
+      prev
+        .filter((w) => w.fromComponent !== index && w.toComponent !== index)
+        .map((w) => ({
+          ...w,
+          fromComponent: w.fromComponent > index ? w.fromComponent - 1 : w.fromComponent,
+          toComponent:   w.toComponent   > index ? w.toComponent   - 1 : w.toComponent,
+        })),
+    );
+    setBoardItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // ─── Detect modal state ───────────────────────────────────────────────────────
   const [detectOpen, setDetectOpen] = useState(false);
   const [detectLoading, setDetectLoading] = useState(false);
   const [detectResult, setDetectResult] = useState<{
@@ -210,13 +231,15 @@ const Index = () => {
     else runDetection();
   };
 
-  // Pre-compute mm-converted items for the minimap. Memoized so we don't recompute on every render.
   const mapItems = useMemo(
-    () => boardItems.map((item) => ({ type: item.type, ...itemToMm(item) })),
+    () => boardItems.map((item) => ({
+      type: item.type,
+      rotation_deg: item.rotation_deg ?? 0,
+      ...itemToMm(item),
+    })),
     [boardItems],
   );
 
-  // SCARA-style placement job for the physical robot.
   const handleExportRobotJob = () => {
     if (boardItems.length === 0) {
       alert("Place at least one component before exporting a robot job.");
@@ -228,7 +251,11 @@ const Index = () => {
       const prefix = item.type[0] ?? "X";
       const id = `${prefix}${counters[item.type]}`;
       const { x_mm, y_mm } = itemToMm(item);
-      return { id, type: item.type, x_mm, y_mm, rotation_deg: 0, pickup_order: idx + 1 };
+      return {
+        id, type: item.type, x_mm, y_mm,
+        rotation_deg: item.rotation_deg ?? 0,
+        pickup_order: idx + 1,
+      };
     });
     const nets = wires.map((w) => ({
       id: w.id,
@@ -294,14 +321,12 @@ const Index = () => {
     downloadJson(`pcbworkspace-backup-${Date.now()}.json`,{exportedAt:new Date().toISOString(),schemaVersion:1,savedProjects:loadSavedProjects(email),recentFiles:loadRecents(email)});
   };
 
-  // Floating file-action icon button styles
   const floatIconBtn = "h-8 w-8 flex items-center justify-center rounded text-primary/80 hover:text-primary hover:bg-primary/15 transition-colors";
 
   return (
     <div className="h-screen w-screen flex overflow-hidden relative bg-black">
       {showDemo && <JEPADemo onClose={() => setShowDemo(false)} />}
 
-      {/* Top nav bar — account stuff restored to the right side */}
       <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-end gap-2 px-4 py-2 bg-black/60 border-b border-white/5">
         <span className="text-xs font-semibold text-white mr-2">{email}</span>
         <button type="button" onClick={() => navigate("/login", { replace: true })} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Switch Account</button>
@@ -309,7 +334,6 @@ const Index = () => {
         <a href="https://spaceroboticscreations.com/" target="_blank" rel="noopener noreferrer" className="text-[#00d4ff] text-xs font-bold opacity-70 hover:opacity-100 transition-opacity">SERC ↗</a>
       </div>
 
-      {/* Left sidebar blue */}
       <div className="w-[230px] shrink-0 flex flex-col gap-3 p-3 pt-12" style={{background:"linear-gradient(to bottom, hsl(195,100%,50%), hsl(210,100%,40%))"}}>
         <div className="flex items-center gap-2 mt-1">
           <img src={`${import.meta.env.BASE_URL}serc-robot-transparent.png`} alt="SERC Robot" className="h-28 w-28 object-contain drop-shadow-lg" />
@@ -318,10 +342,8 @@ const Index = () => {
             <p className="text-[11px] font-semibold text-black/70">Be My Engineer!</p>
           </div>
         </div>
-
         <div className="flex flex-col gap-3 flex-1 overflow-y-auto">
           <div className="relative"><CameraFeed /><CalibrateButton /></div>
-
           <div className="bg-black/20 rounded-xl p-3 border border-black/10">
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-black font-black text-[10px] uppercase tracking-widest">JEPA Vision</h3>
@@ -330,13 +352,11 @@ const Index = () => {
             <NNPanel />
             <button type="button" onClick={() => setShowDemo(true)} className="mt-2 w-full py-2 bg-black text-[#00a3ff] text-[10px] font-black rounded uppercase tracking-widest hover:bg-black/80 transition-colors">Open Demo</button>
           </div>
-
           <Inventory />
           <RobotPanel />
         </div>
       </div>
 
-      {/* Center  PCB board */}
       <div className="flex-1 flex flex-col min-w-0 pt-10">
         <div className="flex-1 p-3 pt-1 min-h-0">
           <div className="h-full rounded-xl border border-primary/30 overflow-hidden flex flex-col" style={{backgroundColor:"hsla(220,70%,10%,0.9)"}}>
@@ -346,7 +366,6 @@ const Index = () => {
             <div className="flex-1 relative">
               <PCBWorkspace items={boardItems} onItemsChange={setBoardItems} wires={wires} wireMode={wireMode} pendingPin={pendingPin} onPinClick={handlePinClick} />
 
-              {/* Floating file actions in the top-right corner of the workspace area */}
               <div className="absolute top-3 right-3 z-30 flex gap-0.5 bg-black/80 border border-primary/30 rounded-lg p-1 shadow-2xl backdrop-blur-sm">
                 <button type="button" onClick={handleSaveProject} className={floatIconBtn} title="Save Project">
                   <Icon.Save />
@@ -359,19 +378,19 @@ const Index = () => {
                 </button>
               </div>
 
-              {/* KiCad-style 2D map in the bottom-right corner */}
               <Minimap2D
                 items={mapItems}
                 wires={wires}
                 pcbWidthMm={PCB_PHYSICAL_MM.width}
                 pcbHeightMm={PCB_PHYSICAL_MM.height}
                 onExport={handleExportRobotJob}
+                onRotate={handleRotateComponent}
+                onDelete={handleDeleteComponent}
               />
             </div>
           </div>
         </div>
 
-        {/* Bottom action bar */}
         <div className="flex gap-2 px-3 pb-3 justify-end items-center">
           <button type="button" onClick={() => { setWireMode(!wireMode); setPendingPin(null); }} className={`h-10 px-4 rounded-md border transition-colors text-[11px] font-semibold ${wireMode ? "border-amber-400 bg-amber-400/20 text-amber-300" : "border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary"}`}>{wireMode ? "Wire: ON" : "Wire Mode"}</button>
           <button type="button" onClick={runDetection} className="h-10 px-4 rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 transition-colors text-[11px] font-semibold text-primary">Detect</button>
@@ -381,7 +400,6 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Right  PCB Robot chat panel — always visible (this is your robot control interface) */}
       <div className="w-[280px] shrink-0 flex flex-col pt-10 border-l border-primary/20" style={{backgroundColor:"hsla(220,70%,8%,0.97)"}}>
         <PCBRobot />
       </div>

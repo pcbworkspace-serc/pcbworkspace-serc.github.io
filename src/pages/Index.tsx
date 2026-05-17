@@ -15,7 +15,7 @@ import { detectCircuitBlocks, type CircuitBlock } from "@/lib/circuits";
 import { type Wire, type PinRef, type NetAnalysis, analyzeNets, makeWireId } from "@/lib/wires";
 import { getPins } from "@/lib/pins";
 import PCBRobot from "@/components/PCBRobot";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { clearSession, getCurrentUserEmail, getRecentsKey, getSavedProjectsKey } from "@/lib/auth";
 
@@ -26,7 +26,12 @@ type SavedProject = { id: string; name: string; lastOpened: number; snapshot?: {
 const MAX_RECENTS = 6;
 const MAX_SAVED_PROJECTS = 20;
 
+// Physical PCB dimensions the workspace represents (62×42mm per the JEPA demo).
 const PCB_PHYSICAL_MM = { width: 62, height: 42 };
+
+// Conversion factor: how many millimeters per 1 unit of scene/board-item coordinate.
+// Default 1.0 assumes scene coords are already in mm centered at the PCB origin.
+// Adjust this once you've measured the actual scale on the bench against the robot.
 const SCENE_MM_PER_UNIT = 1.0;
 
 function getSavedProjectsKey2(email: string) { return `pcbworkspace.savedProjects.v2:${email.trim().toLowerCase()}`; }
@@ -50,6 +55,8 @@ function parseBoardItems(value: unknown): BoardItem[] {
   return value.filter((item: any) => item?.type && typeof item.x==="number" && typeof item.y==="number");
 }
 
+// Convert a board item's scene-coord position to physical mm on the PCB.
+// Scene origin = PCB center. Output origin = bottom-left of the PCB.
 function itemToMm(item: BoardItem) {
   return {
     x_mm: +(item.x * SCENE_MM_PER_UNIT + PCB_PHYSICAL_MM.width / 2).toFixed(3),
@@ -88,20 +95,14 @@ const Index = () => {
   const [pendingPin, setPendingPin] = useState<PinRef | null>(null);
 
   const handlePinClick = (ref: PinRef) => {
-    if (!pendingPin) {
-      setPendingPin(ref);
-      return;
-    }
+    if (!pendingPin) { setPendingPin(ref); return; }
     if (pendingPin.componentIndex === ref.componentIndex && pendingPin.pinName === ref.pinName) {
-      setPendingPin(null);
-      return;
+      setPendingPin(null); return;
     }
     const newWire: Wire = {
       id: makeWireId(),
-      fromComponent: pendingPin.componentIndex,
-      fromPin: pendingPin.pinName,
-      toComponent: ref.componentIndex,
-      toPin: ref.pinName,
+      fromComponent: pendingPin.componentIndex, fromPin: pendingPin.pinName,
+      toComponent: ref.componentIndex,         toPin: ref.pinName,
     };
     setWires((prev) => [...prev, newWire]);
     setPendingPin(null);
@@ -110,6 +111,7 @@ const Index = () => {
   const [showDemo, setShowDemo] = useState(false);
   const navigate = useNavigate();
 
+  // Wake Render in the background on mount so first detection isn't a cold start
   useEffect(() => { wakeBackend(); }, []);
 
   // Detect modal state
@@ -204,13 +206,17 @@ const Index = () => {
   const rerunWithMethod = (method: DetectionMethod) => {
     setDetectMethod(method);
     const last = lastDetectionRef.current;
-    if (last.frame) {
-      runDetectionWith(last.frame, last.source, last.imageUrl, method);
-    } else {
-      runDetection();
-    }
+    if (last.frame) runDetectionWith(last.frame, last.source, last.imageUrl, method);
+    else runDetection();
   };
 
+  // Pre-compute mm-converted items for the minimap. Memoized so we don't recompute on every render.
+  const mapItems = useMemo(
+    () => boardItems.map((item) => ({ type: item.type, ...itemToMm(item) })),
+    [boardItems],
+  );
+
+  // SCARA-style placement job for the physical robot.
   const handleExportRobotJob = () => {
     if (boardItems.length === 0) {
       alert("Place at least one component before exporting a robot job.");
@@ -222,14 +228,7 @@ const Index = () => {
       const prefix = item.type[0] ?? "X";
       const id = `${prefix}${counters[item.type]}`;
       const { x_mm, y_mm } = itemToMm(item);
-      return {
-        id,
-        type: item.type,
-        x_mm,
-        y_mm,
-        rotation_deg: 0,
-        pickup_order: idx + 1,
-      };
+      return { id, type: item.type, x_mm, y_mm, rotation_deg: 0, pickup_order: idx + 1 };
     });
     const nets = wires.map((w) => ({
       id: w.id,
@@ -295,31 +294,19 @@ const Index = () => {
     downloadJson(`pcbworkspace-backup-${Date.now()}.json`,{exportedAt:new Date().toISOString(),schemaVersion:1,savedProjects:loadSavedProjects(email),recentFiles:loadRecents(email)});
   };
 
-  const iconBtn = "h-7 w-7 flex items-center justify-center rounded border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-colors";
+  // Floating file-action icon button styles
+  const floatIconBtn = "h-8 w-8 flex items-center justify-center rounded text-primary/80 hover:text-primary hover:bg-primary/15 transition-colors";
 
   return (
     <div className="h-screen w-screen flex overflow-hidden relative bg-black">
       {showDemo && <JEPADemo onClose={() => setShowDemo(false)} />}
 
-      {/* Top nav bar — account on the left, file actions on the right */}
-      <div className="absolute top-0 left-0 right-0 z-50 flex items-center gap-2 px-4 py-2 bg-black/60 border-b border-white/5">
-        <span className="text-xs font-semibold text-white">{email}</span>
+      {/* Top nav bar — account stuff restored to the right side */}
+      <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-end gap-2 px-4 py-2 bg-black/60 border-b border-white/5">
+        <span className="text-xs font-semibold text-white mr-2">{email}</span>
         <button type="button" onClick={() => navigate("/login", { replace: true })} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Switch Account</button>
         <button type="button" onClick={() => { clearSession(); navigate("/login", { replace: true }); }} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Logout</button>
         <a href="https://spaceroboticscreations.com/" target="_blank" rel="noopener noreferrer" className="text-[#00d4ff] text-xs font-bold opacity-70 hover:opacity-100 transition-opacity">SERC ↗</a>
-
-        <div className="flex-1" />
-
-        {/* File actions — moved to the right where Ask Layla used to live */}
-        <button type="button" onClick={handleSaveProject} className={iconBtn} title="Save Project">
-          <Icon.Save />
-        </button>
-        <button type="button" onClick={handleImport} className={iconBtn} title="Import a project JSON">
-          <Icon.Import />
-        </button>
-        <button type="button" onClick={handleExport} className={iconBtn} title="Export all projects backup">
-          <Icon.Export />
-        </button>
       </div>
 
       {/* Left sidebar blue */}
@@ -358,8 +345,23 @@ const Index = () => {
             </div>
             <div className="flex-1 relative">
               <PCBWorkspace items={boardItems} onItemsChange={setBoardItems} wires={wires} wireMode={wireMode} pendingPin={pendingPin} onPinClick={handlePinClick} />
+
+              {/* Floating file actions in the top-right corner of the workspace area */}
+              <div className="absolute top-3 right-3 z-30 flex gap-0.5 bg-black/80 border border-primary/30 rounded-lg p-1 shadow-2xl backdrop-blur-sm">
+                <button type="button" onClick={handleSaveProject} className={floatIconBtn} title="Save Project">
+                  <Icon.Save />
+                </button>
+                <button type="button" onClick={handleImport} className={floatIconBtn} title="Import a project JSON">
+                  <Icon.Import />
+                </button>
+                <button type="button" onClick={handleExport} className={floatIconBtn} title="Export all projects backup">
+                  <Icon.Export />
+                </button>
+              </div>
+
+              {/* KiCad-style 2D map in the bottom-right corner */}
               <Minimap2D
-                items={boardItems}
+                items={mapItems}
                 wires={wires}
                 pcbWidthMm={PCB_PHYSICAL_MM.width}
                 pcbHeightMm={PCB_PHYSICAL_MM.height}
@@ -379,7 +381,7 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Right  PCB Robot chat panel — always visible since the toggle was removed */}
+      {/* Right  PCB Robot chat panel — always visible (this is your robot control interface) */}
       <div className="w-[280px] shrink-0 flex flex-col pt-10 border-l border-primary/20" style={{backgroundColor:"hsla(220,70%,8%,0.97)"}}>
         <PCBRobot />
       </div>

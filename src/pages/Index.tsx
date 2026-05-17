@@ -4,7 +4,6 @@ import CameraFeed from "@/components/CameraFeed";
 import RobotPanel from "@/components/RobotPanel";
 import SampleDropdown from "@/components/SampleDropdown";
 import CalibrateButton from "@/components/CalibrateButton";
-import SavedFiles from "@/components/SavedFiles";
 import JEPADemo from "@/components/JEPADemo";
 import NNPanel from "@/components/NNPanel";
 import DetectModal from "@/components/DetectModal";
@@ -27,14 +26,7 @@ type SavedProject = { id: string; name: string; lastOpened: number; snapshot?: {
 const MAX_RECENTS = 6;
 const MAX_SAVED_PROJECTS = 20;
 
-// Physical PCB dimensions the workspace represents.
-// Default = 62 × 42 mm, matching the JEPA demo description.
-// If/when you want a calibration UI, expose these as state.
 const PCB_PHYSICAL_MM = { width: 62, height: 42 };
-
-// Conversion factor: how many millimeters per 1 unit of scene/board-item coordinate.
-// If your 3D scene already uses mm directly, leave at 1.0. Calibrate against
-// the real robot once you measure the actual XY scale on the bench.
 const SCENE_MM_PER_UNIT = 1.0;
 
 function getSavedProjectsKey2(email: string) { return `pcbworkspace.savedProjects.v2:${email.trim().toLowerCase()}`; }
@@ -58,8 +50,6 @@ function parseBoardItems(value: unknown): BoardItem[] {
   return value.filter((item: any) => item?.type && typeof item.x==="number" && typeof item.y==="number");
 }
 
-// Convert a board item's scene-coord position to physical mm on the PCB.
-// Assumes (0,0) in scene coords = center of PCB; positive X right, positive Y up.
 function itemToMm(item: BoardItem) {
   return {
     x_mm: +(item.x * SCENE_MM_PER_UNIT + PCB_PHYSICAL_MM.width / 2).toFixed(3),
@@ -118,10 +108,8 @@ const Index = () => {
   };
   const [detectMethod, setDetectMethod] = useState<DetectionMethod>("yolo_hybrid");
   const [showDemo, setShowDemo] = useState(false);
-  const [showRobot, setShowRobot] = useState(true);
   const navigate = useNavigate();
 
-  // Wake Render in the background so first detection isn't a cold start
   useEffect(() => { wakeBackend(); }, []);
 
   // Detect modal state
@@ -223,13 +211,11 @@ const Index = () => {
     }
   };
 
-  // SCARA-style placement job for the physical robot.
   const handleExportRobotJob = () => {
     if (boardItems.length === 0) {
       alert("Place at least one component before exporting a robot job.");
       return;
     }
-    // Assign sequential IDs per component type: R1, R2, C1, ...
     const counters: Record<string, number> = {};
     const componentExport = boardItems.map((item, idx) => {
       counters[item.type] = (counters[item.type] || 0) + 1;
@@ -245,7 +231,6 @@ const Index = () => {
         pickup_order: idx + 1,
       };
     });
-    // Map wires (pin-to-pin) to nets (component-to-component) for traceability
     const nets = wires.map((w) => ({
       id: w.id,
       from: { component_id: componentExport[w.fromComponent]?.id ?? null, pin: w.fromPin },
@@ -316,8 +301,16 @@ const Index = () => {
     <div className="h-screen w-screen flex overflow-hidden relative bg-black">
       {showDemo && <JEPADemo onClose={() => setShowDemo(false)} />}
 
-      {/* Top nav bar */}
+      {/* Top nav bar — account on the left, file actions on the right */}
       <div className="absolute top-0 left-0 right-0 z-50 flex items-center gap-2 px-4 py-2 bg-black/60 border-b border-white/5">
+        <span className="text-xs font-semibold text-white">{email}</span>
+        <button type="button" onClick={() => navigate("/login", { replace: true })} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Switch Account</button>
+        <button type="button" onClick={() => { clearSession(); navigate("/login", { replace: true }); }} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Logout</button>
+        <a href="https://spaceroboticscreations.com/" target="_blank" rel="noopener noreferrer" className="text-[#00d4ff] text-xs font-bold opacity-70 hover:opacity-100 transition-opacity">SERC ↗</a>
+
+        <div className="flex-1" />
+
+        {/* File actions — moved to the right where Ask Layla used to live */}
         <button type="button" onClick={handleSaveProject} className={iconBtn} title="Save Project">
           <Icon.Save />
         </button>
@@ -327,18 +320,6 @@ const Index = () => {
         <button type="button" onClick={handleExport} className={iconBtn} title="Export all projects backup">
           <Icon.Export />
         </button>
-        <SavedFiles onOpenProject={(projectId) => {
-          const project = loadSavedProjects(email).find(p => p.id === projectId);
-          if (project?.snapshot?.boardItems) setBoardItems(parseBoardItems(project.snapshot.boardItems));
-        }} />
-
-        <div className="flex-1" />
-
-        <span className="text-xs font-semibold text-white mr-2">{email}</span>
-        <button type="button" onClick={() => navigate("/login", { replace: true })} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Switch Account</button>
-        <button type="button" onClick={() => { clearSession(); navigate("/login", { replace: true }); }} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Logout</button>
-        <a href="https://spaceroboticscreations.com/" target="_blank" rel="noopener noreferrer" className="text-[#00d4ff] text-xs font-bold opacity-70 hover:opacity-100 transition-opacity">SERC ↗</a>
-        <button type="button" onClick={() => setShowRobot(v => !v)} className="text-xs rounded-full border border-[#00d4ff]/60 px-3 py-1 text-[#00d4ff] hover:bg-[#00d4ff]/10 transition-colors font-semibold flex items-center gap-1.5">{showRobot ? "Hide Layla" : "Ask Layla"}</button>
       </div>
 
       {/* Left sidebar blue */}
@@ -398,12 +379,11 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Right  PCB Robot chat panel (narrower) */}
-      {showRobot && (
-        <div className="w-[280px] shrink-0 flex flex-col pt-10 border-l border-primary/20" style={{backgroundColor:"hsla(220,70%,8%,0.97)"}}>
-          <PCBRobot />
-        </div>
-      )}
+      {/* Right  PCB Robot chat panel — always visible since the toggle was removed */}
+      <div className="w-[280px] shrink-0 flex flex-col pt-10 border-l border-primary/20" style={{backgroundColor:"hsla(220,70%,8%,0.97)"}}>
+        <PCBRobot />
+      </div>
+
       {detectOpen && (
         <DetectModal
           result={detectResult}

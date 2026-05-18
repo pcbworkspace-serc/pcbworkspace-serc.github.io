@@ -1,16 +1,11 @@
-import { useState, useRef } from "react";
+import { useRef, useState } from "react";
 import { type Wire } from "@/lib/wires";
+import { runDRC, getViolatingIndices, type DRCMmItem } from "@/lib/drc";
 
-interface MapItemPin {
-  name: string;
-  x_mm: number;
-  y_mm: number;
-}
-
+interface MapItemPin { name: string; x_mm: number; y_mm: number }
 interface MapItem {
   type: string;
-  x_mm: number;
-  y_mm: number;
+  x_mm: number; y_mm: number;
   rotation_deg: number;
   pins: MapItemPin[];
 }
@@ -20,33 +15,29 @@ interface Minimap2DProps {
   wires: Wire[];
   pcbWidthMm: number;
   pcbHeightMm: number;
+  selectedIndex: number | null;
+  onSelect: (idx: number | null) => void;
+  viewMode: "pcb" | "sch";
+  onViewModeChange: (m: "pcb" | "sch") => void;
+  unit: "mm" | "in" | "mil";
+  onUnitChange: (u: "mm" | "in" | "mil") => void;
+  collapsed: boolean;
+  onCollapsedChange: (c: boolean) => void;
   onExport?: () => void;
+  onExportBOM?: () => void;
   onRotate?: (index: number) => void;
   onDelete?: (index: number) => void;
   onNudge?: (index: number, dxMm: number, dyMm: number) => void;
 }
 
-type Unit = "mm" | "in" | "mil";
-type ViewMode = "pcb" | "sch";
-
 const COMPONENT_COLORS: Record<string, string> = {
-  Resistor: "#f59e0b",
-  Capacitor: "#10b981",
-  Diode: "#a78bfa",
-  LED: "#fbbf24",
-  Transistor: "#ef4444",
-  IC: "#3b82f6",
-  Connector: "#ec4899",
+  Resistor: "#f59e0b", Capacitor: "#10b981", Diode: "#a78bfa",
+  LED: "#fbbf24", Transistor: "#ef4444", IC: "#3b82f6", Connector: "#ec4899",
 };
 
-const W = 380;
-const H = 320;
-const TITLE_H = 28;
-const TOP_RULER_H = 18;
-const INFO_H = 54;  // taller — fits two rows of info + buttons when something's selected
-const LEFT_RULER_W = 28;
-const RIGHT_PAD = 8;
-const BOTTOM_PAD = 4;
+const W = 380, H = 320;
+const TITLE_H = 28, TOP_RULER_H = 18, INFO_H = 54;
+const LEFT_RULER_W = 28, RIGHT_PAD = 8, BOTTOM_PAD = 4;
 const CANVAS_X = LEFT_RULER_W;
 const CANVAS_Y = TITLE_H + TOP_RULER_H;
 const CANVAS_W = W - LEFT_RULER_W - RIGHT_PAD;
@@ -55,39 +46,47 @@ const CANVAS_H = H - TITLE_H - TOP_RULER_H - INFO_H - BOTTOM_PAD;
 const MM_PER_IN = 25.4;
 const MM_PER_MIL = 0.0254;
 
+type Unit = "mm" | "in" | "mil";
+
 function makeComponentIds(items: MapItem[]): string[] {
   const counters: Record<string, number> = {};
-  return items.map((item) => {
+  return items.map(item => {
     counters[item.type] = (counters[item.type] || 0) + 1;
     return `${item.type[0] ?? "X"}${counters[item.type]}`;
   });
 }
 
 function formatCoord(mm: number, unit: Unit): string {
-  if (unit === "in") return (mm / MM_PER_IN).toFixed(3);
+  if (unit === "in")  return (mm / MM_PER_IN).toFixed(3);
   if (unit === "mil") return (mm / MM_PER_MIL).toFixed(0);
   return mm.toFixed(2);
 }
 
 export default function Minimap2D({
   items, wires, pcbWidthMm, pcbHeightMm,
-  onExport, onRotate, onDelete, onNudge,
+  selectedIndex, onSelect,
+  viewMode, onViewModeChange,
+  unit, onUnitChange,
+  collapsed, onCollapsedChange,
+  onExport, onExportBOM, onRotate, onDelete, onNudge,
 }: Minimap2DProps) {
-  const [collapsed, setCollapsed] = useState(false);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [unit, setUnit] = useState<Unit>("mm");
-  const [viewMode, setViewMode] = useState<ViewMode>("pcb");
-  const [cursor, setCursor] = useState<{ x_mm: number; y_mm: number } | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const [cursor, setCursor] = useState<{ x_mm: number; y_mm: number } | null>(null);
 
-  const cycleUnit = () => setUnit((u) => (u === "mm" ? "in" : u === "in" ? "mil" : "mm"));
+  const cycleUnit = () =>
+    onUnitChange(unit === "mm" ? "in" : unit === "in" ? "mil" : "mm");
 
-  // ──────── Collapsed state ────────
+  const drcItems: DRCMmItem[] = items.map(i => ({
+    type: i.type, x_mm: i.x_mm, y_mm: i.y_mm, rotation_deg: i.rotation_deg,
+  }));
+  const violations = runDRC(drcItems, pcbWidthMm, pcbHeightMm);
+  const violatingSet = getViolatingIndices(violations);
+
   if (collapsed) {
     return (
       <div
         className="absolute bottom-3 right-3 z-30 bg-black/85 border border-primary/30 rounded-lg shadow-2xl backdrop-blur-sm flex items-center gap-2 px-2 py-1.5 cursor-pointer hover:bg-black/95 transition-colors"
-        onClick={() => setCollapsed(false)}
+        onClick={() => onCollapsedChange(false)}
         title="Expand 2D Board view"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -96,22 +95,19 @@ export default function Minimap2D({
           <line x1="3" y1="9" x2="21" y2="9" />
         </svg>
         <span className="text-[10px] font-black uppercase tracking-widest text-primary">2D Board</span>
+        {violations.length > 0 && (
+          <span className="text-[9px] font-black text-red-400">⚠ {violations.length}</span>
+        )}
         <span className="text-[9px] text-primary/60">▲</span>
       </div>
     );
   }
 
-  // PCB aspect-fit inside canvas area
   const pcbAspect = pcbWidthMm / pcbHeightMm;
   const canvasAspect = CANVAS_W / CANVAS_H;
   let pcbPxW: number, pcbPxH: number;
-  if (pcbAspect > canvasAspect) {
-    pcbPxW = CANVAS_W;
-    pcbPxH = CANVAS_W / pcbAspect;
-  } else {
-    pcbPxH = CANVAS_H;
-    pcbPxW = CANVAS_H * pcbAspect;
-  }
+  if (pcbAspect > canvasAspect) { pcbPxW = CANVAS_W; pcbPxH = CANVAS_W / pcbAspect; }
+  else                          { pcbPxH = CANVAS_H; pcbPxW = CANVAS_H * pcbAspect; }
   const pcbX = CANVAS_X + (CANVAS_W - pcbPxW) / 2;
   const pcbY = CANVAS_Y + (CANVAS_H - pcbPxH) / 2;
 
@@ -131,33 +127,22 @@ export default function Minimap2D({
     setCursor(pxToMm(e.clientX - rect.left, e.clientY - rect.top));
   };
 
-  // Tick lists
-  const xMajor: number[] = [];
-  for (let mm = 0; mm <= pcbWidthMm; mm += 10) xMajor.push(mm);
-  const xMinor: number[] = [];
-  for (let mm = 0; mm <= pcbWidthMm; mm += 5) if (mm % 10 !== 0) xMinor.push(mm);
-  const yMajor: number[] = [];
-  for (let mm = 0; mm <= pcbHeightMm; mm += 10) yMajor.push(mm);
-  const yMinor: number[] = [];
-  for (let mm = 0; mm <= pcbHeightMm; mm += 5) if (mm % 10 !== 0) yMinor.push(mm);
+  const xMajor: number[] = [], xMinor: number[] = [];
+  for (let mm = 0; mm <= pcbWidthMm; mm += 5) (mm % 10 === 0 ? xMajor : xMinor).push(mm);
+  const yMajor: number[] = [], yMinor: number[] = [];
+  for (let mm = 0; mm <= pcbHeightMm; mm += 5) (mm % 10 === 0 ? yMajor : yMinor).push(mm);
 
   const ids = makeComponentIds(items);
-  const sel = selected != null ? items[selected] : null;
-  const selId = selected != null ? ids[selected] : null;
+  const sel = selectedIndex != null ? items[selectedIndex] : null;
+  const selId = selectedIndex != null ? ids[selectedIndex] : null;
   const snapped = cursor ? { x_mm: Math.round(cursor.x_mm), y_mm: Math.round(cursor.y_mm) } : null;
 
-  // ──────── Render helpers ────────
-
-  // Get a wire endpoint position (mm) — pin-level, with fallback to component center
   const wireEndpoint = (compIndex: number, pinName: string): { x: number; y: number } | null => {
-    const item = items[compIndex];
-    if (!item) return null;
-    const pin = item.pins.find((p) => p.name === pinName);
+    const item = items[compIndex]; if (!item) return null;
+    const pin = item.pins.find(p => p.name === pinName);
     if (pin) return { x: xToPx(pin.x_mm), y: yToPx(pin.y_mm) };
     return { x: xToPx(item.x_mm), y: yToPx(item.y_mm) };
   };
-
-  // SVG path for Manhattan-routed wire (3 segments, midpoint bend on X)
   const manhattanPath = (a: { x: number; y: number }, b: { x: number; y: number }) => {
     const midX = (a.x + b.x) / 2;
     return `M ${a.x},${a.y} L ${midX},${a.y} L ${midX},${b.y} L ${b.x},${b.y}`;
@@ -171,71 +156,70 @@ export default function Minimap2D({
       <svg
         ref={svgRef}
         width={W} height={H}
-        onClick={() => setSelected(null)}
+        onClick={() => onSelect(null)}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setCursor(null)}
         style={{ display: "block" }}
       >
-        {/* ── Title bar ─────────────────────────────────────────────────────── */}
         <rect x={0} y={0} width={W} height={TITLE_H} fill="rgba(0,212,255,0.08)" />
         <text x={8} y={18} fontSize="10" fontWeight="900" fill="#00d4ff" letterSpacing="0.5">
           {pcbWidthMm}×{pcbHeightMm}MM
         </text>
 
-        {/* View mode toggle */}
-        <g onClick={(e) => { e.stopPropagation(); setViewMode("pcb"); }} style={{ cursor: "pointer" }}>
+        <g onClick={(e) => { e.stopPropagation(); onViewModeChange("pcb"); }} style={{ cursor: "pointer" }}>
           <rect x={70} y={6} width={32} height={16} rx={3}
                 fill={viewMode === "pcb" ? "rgba(0,212,255,0.35)" : "rgba(255,255,255,0.04)"}
                 stroke="#00d4ff" strokeWidth="0.7" />
           <text x={86} y={18} fontSize="9" fontWeight="900" fill="#00d4ff" textAnchor="middle">PCB</text>
         </g>
-        <g onClick={(e) => { e.stopPropagation(); setViewMode("sch"); }} style={{ cursor: "pointer" }}>
+        <g onClick={(e) => { e.stopPropagation(); onViewModeChange("sch"); }} style={{ cursor: "pointer" }}>
           <rect x={104} y={6} width={32} height={16} rx={3}
                 fill={viewMode === "sch" ? "rgba(0,212,255,0.35)" : "rgba(255,255,255,0.04)"}
                 stroke="#00d4ff" strokeWidth="0.7" />
           <text x={120} y={18} fontSize="9" fontWeight="900" fill="#00d4ff" textAnchor="middle">SCH</text>
         </g>
 
-        {/* Unit toggle */}
         <g onClick={(e) => { e.stopPropagation(); cycleUnit(); }} style={{ cursor: "pointer" }}>
-          <rect x={W - 190} y={6} width={32} height={16} rx={3}
+          <rect x={140} y={6} width={32} height={16} rx={3}
                 fill="rgba(255,255,255,0.04)" stroke="#00d4ff" strokeWidth="0.7" />
-          <text x={W - 174} y={18} fontSize="9" fontWeight="900" fill="#00d4ff" textAnchor="middle">
+          <text x={156} y={18} fontSize="9" fontWeight="900" fill="#00d4ff" textAnchor="middle">
             {unit.toUpperCase()}
           </text>
         </g>
 
-        {/* Robot export */}
-        {onExport && (
-          <g
-            onClick={(e) => { e.stopPropagation(); if (items.length > 0) onExport(); }}
-            style={{ cursor: items.length > 0 ? "pointer" : "not-allowed", opacity: items.length > 0 ? 1 : 0.35 }}
-          >
-            <rect x={W - 152} y={6} width={116} height={16} rx={3}
-                  fill="rgba(0,212,255,0.2)" stroke="#00d4ff" strokeWidth="1" />
-            <text x={W - 94} y={18} fontSize="9" fontWeight="900" fill="#00d4ff" textAnchor="middle">
-              ⤴ ROBOT JOB
-            </text>
+        {onExportBOM && (
+          <g onClick={(e) => { e.stopPropagation(); if (items.length > 0) onExportBOM(); }}
+             style={{ cursor: items.length > 0 ? "pointer" : "not-allowed", opacity: items.length > 0 ? 1 : 0.35 }}>
+            <rect x={W - 102} y={6} width={36} height={16} rx={3}
+                  fill="rgba(0,212,255,0.16)" stroke="#00d4ff" strokeWidth="0.7" />
+            <text x={W - 84} y={18} fontSize="9" fontWeight="900" fill="#00d4ff" textAnchor="middle">BOM</text>
           </g>
         )}
 
-        {/* Collapse */}
-        <g onClick={(e) => { e.stopPropagation(); setCollapsed(true); }} style={{ cursor: "pointer" }}>
+        {onExport && (
+          <g onClick={(e) => { e.stopPropagation(); if (items.length > 0) onExport(); }}
+             style={{ cursor: items.length > 0 ? "pointer" : "not-allowed", opacity: items.length > 0 ? 1 : 0.35 }}>
+            <rect x={W - 62} y={6} width={28} height={16} rx={3}
+                  fill="rgba(0,212,255,0.2)" stroke="#00d4ff" strokeWidth="1" />
+            <text x={W - 48} y={18} fontSize="11" fontWeight="900" fill="#00d4ff" textAnchor="middle">⤴</text>
+            <title>Export robot pick-and-place job</title>
+          </g>
+        )}
+
+        <g onClick={(e) => { e.stopPropagation(); onCollapsedChange(true); }} style={{ cursor: "pointer" }}>
           <rect x={W - 28} y={6} width={20} height={16} rx={3}
                 fill="rgba(255,255,255,0.05)" stroke="#00d4ff" strokeWidth="0.7" />
           <text x={W - 18} y={18} fontSize="11" fontWeight="900" fill="#00d4ff" textAnchor="middle">−</text>
         </g>
 
-        {/* ── Rulers ────────────────────────────────────────────────────────── */}
         <rect x={0} y={TITLE_H} width={W} height={TOP_RULER_H} fill="rgba(0,0,0,0.6)" />
         <rect x={0} y={TITLE_H + TOP_RULER_H} width={LEFT_RULER_W} height={CANVAS_H} fill="rgba(0,0,0,0.6)" />
-
-        {xMinor.map((mm) => (
+        {xMinor.map(mm => (
           <line key={`xmt-${mm}`} x1={xToPx(mm)} y1={TITLE_H + TOP_RULER_H - 2}
                 x2={xToPx(mm)} y2={TITLE_H + TOP_RULER_H}
                 stroke="#00d4ff" strokeWidth="0.4" opacity="0.4" />
         ))}
-        {xMajor.map((mm) => (
+        {xMajor.map(mm => (
           <g key={`xt-${mm}`}>
             <line x1={xToPx(mm)} y1={TITLE_H + TOP_RULER_H - 5} x2={xToPx(mm)} y2={TITLE_H + TOP_RULER_H}
                   stroke="#00d4ff" strokeWidth="0.7" opacity="0.8" />
@@ -243,12 +227,12 @@ export default function Minimap2D({
                   fontSize="7" fill="#00d4ff" textAnchor="middle" opacity="0.85">{formatCoord(mm, unit)}</text>
           </g>
         ))}
-        {yMinor.map((mm) => (
+        {yMinor.map(mm => (
           <line key={`ymt-${mm}`} x1={LEFT_RULER_W - 2} y1={yToPx(mm)}
                 x2={LEFT_RULER_W} y2={yToPx(mm)}
                 stroke="#00d4ff" strokeWidth="0.4" opacity="0.4" />
         ))}
-        {yMajor.map((mm) => (
+        {yMajor.map(mm => (
           <g key={`yt-${mm}`}>
             <line x1={LEFT_RULER_W - 5} y1={yToPx(mm)} x2={LEFT_RULER_W} y2={yToPx(mm)}
                   stroke="#00d4ff" strokeWidth="0.7" opacity="0.8" />
@@ -257,108 +241,98 @@ export default function Minimap2D({
           </g>
         ))}
 
-        {/* ── Canvas (PCB area + grid) ──────────────────────────────────────── */}
         <rect x={pcbX} y={pcbY} width={pcbPxW} height={pcbPxH}
               fill={viewMode === "sch" ? "#0a1525" : "#0d4f25"} />
-
-        {xMinor.map((mm) => (
+        {xMinor.map(mm => (
           <line key={`xgm-${mm}`} x1={xToPx(mm)} y1={pcbY} x2={xToPx(mm)} y2={pcbY + pcbPxH}
                 stroke={viewMode === "sch" ? "#1e3a5f" : "#1a8a4a"} strokeWidth="0.3" opacity="0.25" />
         ))}
-        {yMinor.map((mm) => (
+        {yMinor.map(mm => (
           <line key={`ygm-${mm}`} x1={pcbX} y1={yToPx(mm)} x2={pcbX + pcbPxW} y2={yToPx(mm)}
                 stroke={viewMode === "sch" ? "#1e3a5f" : "#1a8a4a"} strokeWidth="0.3" opacity="0.25" />
         ))}
-        {xMajor.map((mm) => (
+        {xMajor.map(mm => (
           <line key={`xg-${mm}`} x1={xToPx(mm)} y1={pcbY} x2={xToPx(mm)} y2={pcbY + pcbPxH}
                 stroke={viewMode === "sch" ? "#2a5083" : "#1a8a4a"} strokeWidth="0.5" opacity="0.5" />
         ))}
-        {yMajor.map((mm) => (
+        {yMajor.map(mm => (
           <line key={`yg-${mm}`} x1={pcbX} y1={yToPx(mm)} x2={pcbX + pcbPxW} y2={yToPx(mm)}
                 stroke={viewMode === "sch" ? "#2a5083" : "#1a8a4a"} strokeWidth="0.5" opacity="0.5" />
         ))}
         <rect x={pcbX} y={pcbY} width={pcbPxW} height={pcbPxH}
-              fill="none" stroke={viewMode === "sch" ? "#2a5083" : "#1a8a4a"} strokeWidth="1" strokeDasharray="3,2" />
+              fill="none" stroke={viewMode === "sch" ? "#2a5083" : "#1a8a4a"}
+              strokeWidth="1" strokeDasharray="3,2" />
 
-        {/* ── Wires (pin-to-pin) ────────────────────────────────────────────── */}
         {wires.map((w) => {
           const a = wireEndpoint(w.fromComponent, w.fromPin);
           const b = wireEndpoint(w.toComponent, w.toPin);
           if (!a || !b) return null;
           if (viewMode === "sch") {
-            return (
-              <path key={w.id} d={manhattanPath(a, b)}
-                    fill="none" stroke="#fbbf24" strokeWidth="1.3" opacity="0.85" />
-            );
+            return <path key={w.id} d={manhattanPath(a, b)}
+                         fill="none" stroke="#fbbf24" strokeWidth="1.3" opacity="0.85" />;
           }
-          return (
-            <line key={w.id}
-                  x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                  stroke="#fbbf24" strokeWidth="1.3" opacity="0.78" />
-          );
+          return <line key={w.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                       stroke="#fbbf24" strokeWidth="1.3" opacity="0.78" />;
         })}
 
-        {/* ── Components ────────────────────────────────────────────────────── */}
         {items.map((item, i) => {
           const color = COMPONENT_COLORS[item.type] ?? "#888";
           const cx = xToPx(item.x_mm);
           const cy = yToPx(item.y_mm);
-          const isSelected = selected === i;
+          const isSelected = selectedIndex === i;
           const compId = ids[i];
+          const hasDRC = violatingSet.has(i);
+          const strokeColor = hasDRC ? "#ef4444" : (isSelected ? "#fff" : "#000");
+          const strokeWidth = hasDRC ? 2 : (isSelected ? 1.5 : 0.7);
 
           if (viewMode === "sch") {
-            // Schematic style: bigger rectangle, label visible, pin dots at the edges
-            const recW = 26;
-            const recH = 18;
+            const recW = 26, recH = 18;
             return (
               <g key={i}
-                 onClick={(e) => { e.stopPropagation(); setSelected(i); }}
+                 onClick={(e) => { e.stopPropagation(); onSelect(i); }}
                  style={{ cursor: "pointer" }}>
-                <rect
-                  x={cx - recW / 2} y={cy - recH / 2}
-                  width={recW} height={recH} rx={2}
-                  fill="rgba(255,255,255,0.06)"
-                  stroke={isSelected ? "#fff" : "#00d4ff"}
-                  strokeWidth={isSelected ? 1.8 : 1}
-                />
+                <rect x={cx - recW / 2} y={cy - recH / 2}
+                      width={recW} height={recH} rx={2}
+                      fill="rgba(255,255,255,0.06)"
+                      stroke={strokeColor}
+                      strokeWidth={strokeWidth}
+                      strokeDasharray={hasDRC ? "3,2" : undefined} />
                 <text x={cx} y={cy - 1} textAnchor="middle"
-                      fontSize="8" fontWeight="900" fill="#00d4ff" style={{ pointerEvents: "none" }}>
+                      fontSize="8" fontWeight="900"
+                      fill={hasDRC ? "#ef4444" : "#00d4ff"}
+                      style={{ pointerEvents: "none" }}>
                   {compId}
                 </text>
                 <text x={cx} y={cy + 8} textAnchor="middle"
-                      fontSize="6.5" fill="#00d4ff" opacity="0.7" style={{ pointerEvents: "none" }}>
+                      fontSize="6.5" fill="#00d4ff" opacity="0.7"
+                      style={{ pointerEvents: "none" }}>
                   {item.type}
                 </text>
-                {/* Pin dots */}
-                {item.pins.map((p) => (
+                {item.pins.map(p => (
                   <g key={p.name} pointerEvents="none">
                     <circle cx={xToPx(p.x_mm)} cy={yToPx(p.y_mm)} r="2"
                             fill={color} stroke="#000" strokeWidth="0.5" />
                     <text x={xToPx(p.x_mm) + 3} y={yToPx(p.y_mm) - 2}
-                          fontSize="6" fill="#cbd5e1" opacity="0.8">
-                      {p.name}
-                    </text>
+                          fontSize="6" fill="#cbd5e1" opacity="0.8">{p.name}</text>
                   </g>
                 ))}
               </g>
             );
           }
 
-          // PCB mode: small rotated square with pin-1 indicator
           const size = isSelected ? 13 : 10;
           const rot = item.rotation_deg || 0;
           return (
             <g key={i}
                transform={`rotate(${rot} ${cx} ${cy})`}
-               onClick={(e) => { e.stopPropagation(); setSelected(i); }}
+               onClick={(e) => { e.stopPropagation(); onSelect(i); }}
                style={{ cursor: "pointer" }}>
-              <rect
-                x={cx - size / 2} y={cy - size / 2}
-                width={size} height={size} rx={1.5}
-                fill={color}
-                stroke={isSelected ? "#fff" : "#000"}
-                strokeWidth={isSelected ? 1.5 : 0.7}
-              />
+              <rect x={cx - size / 2} y={cy - size / 2}
+                    width={size} height={size} rx={1.5}
+                    fill={color}
+                    stroke={strokeColor}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={hasDRC ? "3,2" : undefined} />
               <text x={cx} y={cy + 2.5} textAnchor="middle"
                     fontSize="7" fontWeight="900" fill="#000"
                     style={{ pointerEvents: "none" }}>
@@ -370,7 +344,6 @@ export default function Minimap2D({
           );
         })}
 
-        {/* Snap crosshair (only in PCB mode for clarity) */}
         {viewMode === "pcb" && snapped && (
           <g pointerEvents="none">
             <line x1={xToPx(snapped.x_mm) - 5} y1={yToPx(snapped.y_mm)}
@@ -386,18 +359,17 @@ export default function Minimap2D({
 
         {items.length === 0 && (
           <text x={pcbX + pcbPxW / 2} y={pcbY + pcbPxH / 2}
-                textAnchor="middle" fontSize="10" fill={viewMode === "sch" ? "#2a5083" : "#1a8a4a"}
+                textAnchor="middle" fontSize="10"
+                fill={viewMode === "sch" ? "#2a5083" : "#1a8a4a"}
                 opacity="0.65" pointerEvents="none">
             place components to see map
           </text>
         )}
 
-        {/* ── Bottom info bar ───────────────────────────────────────────────── */}
         <rect x={0} y={H - INFO_H} width={W} height={INFO_H} fill="rgba(0,0,0,0.78)" />
 
-        {sel && selId != null && selected != null ? (
+        {sel && selId != null && selectedIndex != null ? (
           <>
-            {/* Row 1: identity & coords */}
             <text x={8} y={H - INFO_H + 14} fontSize="10" fontWeight="700" fill="#00d4ff">
               {selId} · {sel.type}
             </text>
@@ -405,16 +377,14 @@ export default function Minimap2D({
               X: {formatCoord(sel.x_mm, unit)}{unit}   Y: {formatCoord(sel.y_mm, unit)}{unit}   θ: {sel.rotation_deg}°
             </text>
 
-            {/* Row 2: nudge arrows + rotate + delete */}
-            {/* Nudge arrows — each click = 1mm */}
             {[
-              { dx: -1, dy:  0, icon: "◀", x: 8,   tip: "Left 1mm" },
-              { dx:  0, dy:  1, icon: "▲", x: 30,  tip: "Up 1mm" },
-              { dx:  0, dy: -1, icon: "▼", x: 52,  tip: "Down 1mm" },
-              { dx:  1, dy:  0, icon: "▶", x: 74,  tip: "Right 1mm" },
-            ].map((b) => (
+              { dx: -1, dy:  0, icon: "◀", x: 8,  tip: "Left 1mm" },
+              { dx:  0, dy:  1, icon: "▲", x: 30, tip: "Up 1mm" },
+              { dx:  0, dy: -1, icon: "▼", x: 52, tip: "Down 1mm" },
+              { dx:  1, dy:  0, icon: "▶", x: 74, tip: "Right 1mm" },
+            ].map(b => (
               <g key={b.icon}
-                 onClick={(e) => { e.stopPropagation(); onNudge?.(selected, b.dx, b.dy); }}
+                 onClick={(e) => { e.stopPropagation(); onNudge?.(selectedIndex, b.dx, b.dy); }}
                  style={{ cursor: "pointer" }}>
                 <title>{b.tip}</title>
                 <rect x={b.x} y={H - INFO_H + 32} width={18} height={18} rx={2}
@@ -426,25 +396,19 @@ export default function Minimap2D({
               </g>
             ))}
 
-            {/* Rotate */}
-            <g
-              onClick={(e) => { e.stopPropagation(); onRotate?.(selected); }}
-              style={{ cursor: "pointer" }}
-            >
+            <g onClick={(e) => { e.stopPropagation(); onRotate?.(selectedIndex); }}
+               style={{ cursor: "pointer" }}>
               <rect x={W - 100} y={H - INFO_H + 32} width={44} height={18} rx={2}
                     fill="rgba(0,212,255,0.18)" stroke="#00d4ff" strokeWidth="0.7" />
               <text x={W - 78} y={H - INFO_H + 45}
                     fontSize="9" fontWeight="900" fill="#00d4ff" textAnchor="middle">↻ ROT</text>
             </g>
-
-            {/* Delete */}
-            <g
-              onClick={(e) => {
-                e.stopPropagation();
-                if (selected != null) { onDelete?.(selected); setSelected(null); }
-              }}
-              style={{ cursor: "pointer" }}
-            >
+            <g onClick={(e) => {
+                 e.stopPropagation();
+                 onDelete?.(selectedIndex);
+                 onSelect(null);
+               }}
+               style={{ cursor: "pointer" }}>
               <rect x={W - 52} y={H - INFO_H + 32} width={44} height={18} rx={2}
                     fill="rgba(239,68,68,0.18)" stroke="#ef4444" strokeWidth="0.7" />
               <text x={W - 30} y={H - INFO_H + 45}
@@ -452,13 +416,34 @@ export default function Minimap2D({
             </g>
           </>
         ) : cursor ? (
-          <text x={8} y={H - INFO_H / 2 + 4} fontSize="10" fontWeight="600" fill="#00d4ff">
-            Cursor: X: {formatCoord(cursor.x_mm, unit)}{unit}   Y: {formatCoord(cursor.y_mm, unit)}{unit}
-          </text>
+          <>
+            <text x={8} y={H - INFO_H / 2 + 4} fontSize="10" fontWeight="600" fill="#00d4ff">
+              Cursor: X: {formatCoord(cursor.x_mm, unit)}{unit}   Y: {formatCoord(cursor.y_mm, unit)}{unit}
+            </text>
+            {violations.length > 0 && (
+              <text x={W - 8} y={H - INFO_H / 2 + 4} fontSize="10" fontWeight="700"
+                    fill="#ef4444" textAnchor="end">
+                ⚠ {violations.length} DRC issue{violations.length === 1 ? "" : "s"}
+              </text>
+            )}
+          </>
         ) : (
-          <text x={8} y={H - INFO_H / 2 + 4} fontSize="10" fontWeight="600" fill="#00d4ff">
-            {items.length} parts · {wires.length} nets · click a part to inspect
-          </text>
+          <>
+            <text x={8} y={H - INFO_H / 2 + 4} fontSize="10" fontWeight="600" fill="#00d4ff">
+              {items.length} parts · {wires.length} nets
+            </text>
+            {violations.length > 0 ? (
+              <text x={W - 8} y={H - INFO_H / 2 + 4} fontSize="10" fontWeight="700"
+                    fill="#ef4444" textAnchor="end">
+                ⚠ {violations.length} DRC issue{violations.length === 1 ? "" : "s"}
+              </text>
+            ) : items.length > 0 && (
+              <text x={W - 8} y={H - INFO_H / 2 + 4} fontSize="10" fontWeight="700"
+                    fill="#10b981" textAnchor="end">
+                DRC ✓ clean
+              </text>
+            )}
+          </>
         )}
       </svg>
     </div>

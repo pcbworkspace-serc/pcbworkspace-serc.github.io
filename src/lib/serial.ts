@@ -2,27 +2,13 @@
 //
 // Browser support: Chromium-based browsers (Chrome, Edge, Brave) on desktop.
 // Requires HTTPS (the deployed site is HTTPS) or localhost.
-// Not supported on Firefox/Safari/mobile.
-//
-// Protocol expected by your ESP32 firmware (you implement this on the embedded side):
-//   - Baud rate: 115200, 8N1
-//   - Commands are newline-terminated ASCII
-//   - Common verbs:
-//       MOVE X<mm> Y<mm> Z<mm> R<deg>   move end-effector to absolute position
-//       PICK / PLACE / RELEASE          gripper open/close
-//       HOME                            return to home position
-//       STOP                            emergency stop
-//       ROTATE <deg>                    rotate end-effector
-//       SCAN / DETECT / ALIGN / VALIDATE  task verbs
-//   - Responses expected on serial (any line is fine):
-//       OK / ERR <msg> / BUSY / READY / pos updates
-//   - Anything not OK/ERR is just shown in the serial console.
+
+import { tapOutgoing, tapIncoming } from "@/lib/lerobot";
 
 const BAUD_RATE = 115200;
 
 export type SerialStatus = "disconnected" | "connecting" | "connected";
 
-// Module-level connection state — there is at most one robot connection per page.
 let port: any = null;
 let writer: WritableStreamDefaultWriter<string> | null = null;
 let reader: ReadableStreamDefaultReader<string> | null = null;
@@ -33,18 +19,13 @@ const statusSubscribers = new Set<(s: SerialStatus) => void>();
 
 function setStatus(s: SerialStatus) {
   currentStatus = s;
-  statusSubscribers.forEach((fn) => {
-    try { fn(s); } catch {}
-  });
+  statusSubscribers.forEach((fn) => { try { fn(s); } catch {} });
 }
 
-export function getSerialStatus(): SerialStatus {
-  return currentStatus;
-}
+export function getSerialStatus(): SerialStatus { return currentStatus; }
 
 export function onSerialStatus(cb: (s: SerialStatus) => void): () => void {
   statusSubscribers.add(cb);
-  // Push current value immediately so subscribers can render right away
   try { cb(currentStatus); } catch {}
   return () => { statusSubscribers.delete(cb); };
 }
@@ -58,7 +39,6 @@ export function isWebSerialSupported(): boolean {
   return typeof navigator !== "undefined" && "serial" in (navigator as any);
 }
 
-/** Open the browser's port picker, connect, and start the read loop. */
 export async function connectRobot(): Promise<void> {
   if (!isWebSerialSupported()) {
     throw new Error("WebSerial not supported. Use Chrome, Edge, or another Chromium browser.");
@@ -69,20 +49,17 @@ export async function connectRobot(): Promise<void> {
     port = await (navigator as any).serial.requestPort();
     await port.open({ baudRate: BAUD_RATE });
 
-    // Writer: encode strings to bytes
     const encoder = new TextEncoderStream();
-    encoder.readable.pipeTo(port.writable).catch(() => { /* ignored */ });
+    encoder.readable.pipeTo(port.writable).catch(() => {});
     writer = encoder.writable.getWriter();
 
-    // Reader: decode bytes back to strings
     const decoder = new TextDecoderStream();
-    port.readable.pipeTo(decoder.writable).catch(() => { /* ignored */ });
+    port.readable.pipeTo(decoder.writable).catch(() => {});
     reader = decoder.readable.getReader();
 
     setStatus("connected");
     readLoop();
   } catch (e) {
-    // User cancelled the port picker, or some hardware error
     await safeClose();
     setStatus("disconnected");
     throw e;
@@ -101,13 +78,12 @@ async function readLoop() {
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
-        lineSubscribers.forEach((fn) => {
-          try { fn(trimmed); } catch {}
-        });
+        // Tap for the LeRobot recorder — silent unless an episode is active
+        try { tapIncoming(trimmed); } catch {}
+        lineSubscribers.forEach((fn) => { try { fn(trimmed); } catch {} });
       }
     }
   } catch {
-    // Stream closed unexpectedly — fall through to cleanup
   } finally {
     await safeClose();
     setStatus("disconnected");
@@ -129,15 +105,13 @@ export async function disconnectRobot(): Promise<void> {
   setStatus("disconnected");
 }
 
-/** Send a single line to the robot (newline appended automatically). */
 export async function sendSerialCommand(cmd: string): Promise<void> {
-  if (!writer) {
-    throw new Error("Robot not connected. Click the badge to connect first.");
-  }
+  if (!writer) throw new Error("Robot not connected. Click the badge to connect first.");
   await writer.write(cmd + "\n");
+  // Tap for the LeRobot recorder — silent unless an episode is active
+  try { tapOutgoing(cmd); } catch {}
 }
 
-/** Translate a ROBOT_CMD JSON object (from Layla) into a serial command line. */
 export function robotCmdToSerialLine(cmd: any): string {
   if (!cmd || typeof cmd !== "object") return "";
   const action = String(cmd.action ?? "").toLowerCase();
@@ -163,17 +137,10 @@ export function robotCmdToSerialLine(cmd: any): string {
     case "detect":   return "DETECT";
     case "align":    return "ALIGN";
     case "validate": return "VALIDATE";
-    default:
-      return `CMD ${JSON.stringify(cmd)}`;
+    default:         return `CMD ${JSON.stringify(cmd)}`;
   }
 }
 
-/**
- * Expose the serial API on `window` for legacy callers (e.g., the existing
- * sendRobotCommand inside PCBRobot.tsx that currently does an HTTP POST).
- * A one-line patch in PCBRobot.tsx can call window.__sendRobotSerial(cmd)
- * instead of fetching `${FLASK_URL}/command`.
- */
 if (typeof window !== "undefined") {
   (window as any).__sendRobotSerial = async (cmd: any) => {
     const line = robotCmdToSerialLine(cmd);

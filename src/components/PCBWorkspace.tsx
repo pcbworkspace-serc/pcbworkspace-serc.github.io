@@ -1,4 +1,4 @@
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Grid } from "@react-three/drei";
 import * as THREE from "three";
 import { useState, useCallback, useEffect, useMemo } from "react";
@@ -25,17 +25,15 @@ type PCBWorkspaceProps = {
   wireMode?: boolean;
   pendingPin?: PinRef | null;
   onPinClick?: (ref: PinRef) => void;
+  selectedIndex?: number | null;
 };
 
-// ── captureScene support ──────────────────────────────────────────────────────
 let _activeCanvas: HTMLCanvasElement | null = null;
 export async function captureScene(): Promise<Blob | null> {
   const canvas = _activeCanvas;
   if (!canvas) return null;
   return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.9));
 }
-
-// ── 3D component models (same as before) ─────────────────────────────────────
 
 function Resistor() {
   return (
@@ -45,10 +43,8 @@ function Resistor() {
         <meshStandardMaterial color="#d2b48c" roughness={0.6} />
       </mesh>
       {[
-        { offset: -0.12, color: "#8B4513" },
-        { offset: -0.05, color: "#000000" },
-        { offset: 0.02, color: "#ff0000" },
-        { offset: 0.09, color: "#FFD700" },
+        { offset: -0.12, color: "#8B4513" }, { offset: -0.05, color: "#000000" },
+        { offset: 0.02, color: "#ff0000" }, { offset: 0.09, color: "#FFD700" },
       ].map((band, i) => (
         <mesh key={`band-${i}`} position={[band.offset, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[0.085, 0.085, 0.02, 16]} />
@@ -270,9 +266,6 @@ function PCBComponent({ label }: { label: string }) {
   }
 }
 
-// ── Pin position math ─────────────────────────────────────────────────────────
-// Given a component and pin name, return world position considering rotation.
-// y has the component group's -0.03 base offset baked in.
 function pinWorldPosition(item: DroppedItem, pinName: string): [number, number, number] | null {
   const pins = getPins(item.type);
   const pin = pins.find((p) => p.name === pinName);
@@ -285,7 +278,6 @@ function pinWorldPosition(item: DroppedItem, pinName: string): [number, number, 
   return [item.x + rx, ly - 0.03, item.y + rz];
 }
 
-// ── 3D wire (cylinder between two pins so it has visible thickness) ───────────
 function Wire3D({ start, end }: { start: [number, number, number]; end: [number, number, number] }) {
   const { mid, len, quat } = useMemo(() => {
     const a = new THREE.Vector3(...start);
@@ -308,7 +300,6 @@ function Wire3D({ start, end }: { start: [number, number, number]; end: [number,
   );
 }
 
-// ── Pin sphere (clickable in wire mode, highlights when pending) ──────────────
 function PinSphere({
   position, wireMode, isPending, onClick,
 }: {
@@ -317,7 +308,6 @@ function PinSphere({
   isPending: boolean;
   onClick: () => void;
 }) {
-  // Slightly raised so it's clearly visible above the component leads
   const pos: [number, number, number] = [position[0], position[1] + 0.02, position[2]];
   const radius = wireMode ? 0.05 : 0.022;
   const color = isPending ? "#fbbf24" : wireMode ? "#10b981" : "#666666";
@@ -326,18 +316,9 @@ function PinSphere({
   return (
     <mesh
       position={pos}
-      onClick={(e) => {
-        if (!wireMode) return;
-        e.stopPropagation();
-        onClick();
-      }}
-      onPointerOver={(e) => {
-        if (!wireMode) return;
-        document.body.style.cursor = "pointer";
-      }}
-      onPointerOut={() => {
-        document.body.style.cursor = "default";
-      }}
+      onClick={(e) => { if (!wireMode) return; e.stopPropagation(); onClick(); }}
+      onPointerOver={() => { if (wireMode) document.body.style.cursor = "pointer"; }}
+      onPointerOut={() => { document.body.style.cursor = "default"; }}
     >
       <sphereGeometry args={[radius, 12, 12]} />
       <meshStandardMaterial color={color} emissive={emissive} emissiveIntensity={intensity} />
@@ -345,9 +326,20 @@ function PinSphere({
   );
 }
 
-// ── Main Workspace ────────────────────────────────────────────────────────────
+/** Glowing amber ring around the selected component — for cross-probing from the 2D map. */
+function SelectionRing({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0.005, 0]}>
+        <torusGeometry args={[0.32, 0.018, 12, 32]} />
+        <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={1.8} />
+      </mesh>
+    </group>
+  );
+}
+
 export default function PCBWorkspace({
-  items, onItemsChange, wires, wireMode, pendingPin, onPinClick,
+  items, onItemsChange, wires, wireMode, pendingPin, onPinClick, selectedIndex,
 }: PCBWorkspaceProps) {
   const [droppedItems, setDroppedItems] = useState<DroppedItem[]>(items ?? []);
   useEffect(() => { if (items) setDroppedItems(items); }, [items]);
@@ -367,11 +359,9 @@ export default function PCBWorkspace({
   }, [onItemsChange]);
 
   return (
-    <div
-      className="w-full h-full relative"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={handleDrop}
-    >
+    <div className="w-full h-full relative"
+         onDragOver={(e) => e.preventDefault()}
+         onDrop={handleDrop}>
       <Canvas
         camera={{ position: [4, 5, 4], fov: 50 }}
         shadows
@@ -389,7 +379,6 @@ export default function PCBWorkspace({
           position={[0, -0.12, 0]}
         />
 
-        {/* Components, each in a rotation group */}
         {droppedItems.map((item, i) => {
           const rotRad = ((item.rotation_deg ?? 0) * Math.PI) / 180;
           return (
@@ -399,9 +388,12 @@ export default function PCBWorkspace({
           );
         })}
 
-        {/* Pin spheres — clickable in wire mode */}
-        {droppedItems.map((item, ci) => {
-          return getPins(item.type).map((pin) => {
+        {typeof selectedIndex === "number" && droppedItems[selectedIndex] && (
+          <SelectionRing position={[droppedItems[selectedIndex].x, -0.03, droppedItems[selectedIndex].y]} />
+        )}
+
+        {droppedItems.map((item, ci) =>
+          getPins(item.type).map((pin) => {
             const wp = pinWorldPosition(item, pin.name);
             if (!wp) return null;
             const isPending =
@@ -417,10 +409,9 @@ export default function PCBWorkspace({
                 onClick={() => onPinClick?.({ componentIndex: ci, pinName: pin.name })}
               />
             );
-          });
-        })}
+          })
+        )}
 
-        {/* Wires — thin yellow cylinders between connected pins */}
         {(wires ?? []).map((w) => {
           const fromItem = droppedItems[w.fromComponent];
           const toItem = droppedItems[w.toComponent];
@@ -428,7 +419,6 @@ export default function PCBWorkspace({
           const a = pinWorldPosition(fromItem, w.fromPin);
           const b = pinWorldPosition(toItem, w.toPin);
           if (!a || !b) return null;
-          // Slightly raise wires so they're visible above pin spheres
           return (
             <Wire3D
               key={w.id}

@@ -9,12 +9,15 @@ import NNPanel from "@/components/NNPanel";
 import DetectModal from "@/components/DetectModal";
 import Minimap2D from "@/components/Minimap2D";
 import RobotConnect from "@/components/RobotConnect";
+import TeachMode from "@/components/TeachMode";
+import { installSerialRecorder } from "@/lib/teach";
 import { getMultiLabelDetection, getDetectBoxesByMethod, wakeBackend, type ClassPrediction, type DetectionBox, type DetectionMethod } from "@/lib/nn";
 import { grabCameraFrame } from "@/components/CameraFeed";
 import { captureScene } from "@/components/PCBWorkspace";
 import { detectCircuitBlocks, type CircuitBlock } from "@/lib/circuits";
 import { type Wire, type PinRef, type NetAnalysis, analyzeNets, makeWireId } from "@/lib/wires";
 import { getPins } from "@/lib/pins";
+import { downloadBOM } from "@/lib/bom";
 import PCBRobot from "@/components/PCBRobot";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -26,7 +29,6 @@ type SavedProject = { id: string; name: string; lastOpened: number; snapshot?: {
 
 const MAX_RECENTS = 6;
 const MAX_SAVED_PROJECTS = 20;
-
 const PCB_PHYSICAL_MM = { width: 62, height: 42 };
 const SCENE_MM_PER_UNIT = 10.0;
 
@@ -50,7 +52,6 @@ function parseBoardItems(value: unknown): BoardItem[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item: any) => item?.type && typeof item.x==="number" && typeof item.y==="number");
 }
-
 function itemToMm(item: BoardItem) {
   return {
     x_mm: +(item.x * SCENE_MM_PER_UNIT + PCB_PHYSICAL_MM.width / 2).toFixed(3),
@@ -59,27 +60,9 @@ function itemToMm(item: BoardItem) {
 }
 
 const Icon = {
-  Save: () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-      <polyline points="17 21 17 13 7 13 7 21"/>
-      <polyline points="7 3 7 8 15 8"/>
-    </svg>
-  ),
-  Import: () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-      <polyline points="7 10 12 15 17 10"/>
-      <line x1="12" y1="15" x2="12" y2="3"/>
-    </svg>
-  ),
-  Export: () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-      <polyline points="17 8 12 3 7 8"/>
-      <line x1="12" y1="3" x2="12" y2="15"/>
-    </svg>
-  ),
+  Save: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>),
+  Import: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>),
+  Export: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>),
 };
 
 const Index = () => {
@@ -87,6 +70,18 @@ const Index = () => {
   const [wires, setWires] = useState<Wire[]>([]);
   const [wireMode, setWireMode] = useState(false);
   const [pendingPin, setPendingPin] = useState<PinRef | null>(null);
+
+  // Sprint 4: lifted minimap UI state (so the 3D scene can cross-probe)
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<"pcb" | "sch">("pcb");
+  const [unit, setUnit] = useState<"mm" | "in" | "mil">("mm");
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Sprint 5: install LeRobot serial recorder once
+  useEffect(() => {
+    installSerialRecorder();
+    wakeBackend();
+  }, []);
 
   const handlePinClick = (ref: PinRef) => {
     if (!pendingPin) { setPendingPin(ref); return; }
@@ -105,9 +100,6 @@ const Index = () => {
   const [showDemo, setShowDemo] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => { wakeBackend(); }, []);
-
-  // ─── Sprint 1: rotation + delete ────────────────────────────────────────────
   const handleRotateComponent = (index: number) => {
     setBoardItems((prev) =>
       prev.map((item, i) =>
@@ -129,9 +121,9 @@ const Index = () => {
         })),
     );
     setBoardItems((prev) => prev.filter((_, i) => i !== index));
+    setSelectedIndex(null);
   };
 
-  // ─── Sprint 2: nudge selected component (1mm at a time) ─────────────────────
   const handleNudgeComponent = (index: number, dxMm: number, dyMm: number) => {
     const halfW = (PCB_PHYSICAL_MM.width  / 2) / SCENE_MM_PER_UNIT;
     const halfH = (PCB_PHYSICAL_MM.height / 2) / SCENE_MM_PER_UNIT;
@@ -149,7 +141,6 @@ const Index = () => {
     );
   };
 
-  // ─── Detect modal state ──────────────────────────────────────────────────────
   const [detectOpen, setDetectOpen] = useState(false);
   const [detectLoading, setDetectLoading] = useState(false);
   const [detectResult, setDetectResult] = useState<{
@@ -191,9 +182,7 @@ const Index = () => {
     let mlError: string | null = null;
     try {
       const ml = await getMultiLabelDetection(frame);
-      mlPredictions = ml.predictions;
-      mlModel = ml.model;
-      mlInferenceMs = ml.inference_ms;
+      mlPredictions = ml.predictions; mlModel = ml.model; mlInferenceMs = ml.inference_ms;
     } catch (e) {
       mlError = e instanceof Error ? e.message : 'Detection failed';
     }
@@ -204,8 +193,7 @@ const Index = () => {
     if (frame) {
       try {
         const bx = await getDetectBoxesByMethod(frame, method);
-        mlBoxes = bx.boxes;
-        mlImageSize = bx.image_size;
+        mlBoxes = bx.boxes; mlImageSize = bx.image_size;
         mlMethod = (bx.method as DetectionMethod) ?? method;
       } catch (e) {
         mlMethodError = e instanceof Error ? e.message : 'Box detection failed';
@@ -245,7 +233,6 @@ const Index = () => {
     else runDetection();
   };
 
-  // mapItems for the minimap — includes mm-converted pin positions
   const mapItems = useMemo(() => {
     return boardItems.map((item) => {
       const { x_mm, y_mm } = itemToMm(item);
@@ -294,9 +281,7 @@ const Index = () => {
       to:   { component_id: componentExport[w.toComponent]?.id ?? null, pin: w.toPin },
     }));
     const job = {
-      schemaVersion: 1,
-      machineType: "scara",
-      units: "mm",
+      schemaVersion: 1, machineType: "scara", units: "mm",
       generatedAt: new Date().toISOString(),
       pcb: {
         width_mm: PCB_PHYSICAL_MM.width,
@@ -308,6 +293,14 @@ const Index = () => {
       nets,
     };
     downloadJson(`pcb-robot-job-${Date.now()}.json`, job);
+  };
+
+  const handleExportBOM = () => {
+    if (boardItems.length === 0) {
+      alert("Place at least one component before exporting a BOM.");
+      return;
+    }
+    downloadBOM(boardItems);
   };
 
   const email = getCurrentUserEmail() ?? "";
@@ -358,13 +351,12 @@ const Index = () => {
     <div className="h-screen w-screen flex overflow-hidden relative bg-black">
       {showDemo && <JEPADemo onClose={() => setShowDemo(false)} />}
 
-      {/* Top bar — account stuff + robot connect badge */}
       <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-end gap-2 px-4 py-2 bg-black/60 border-b border-white/5">
         <span className="text-xs font-semibold text-white mr-2">{email}</span>
         <button type="button" onClick={() => navigate("/login", { replace: true })} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Switch Account</button>
         <button type="button" onClick={() => { clearSession(); navigate("/login", { replace: true }); }} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Logout</button>
         <a href="https://spaceroboticscreations.com/" target="_blank" rel="noopener noreferrer" className="text-[#00d4ff] text-xs font-bold opacity-70 hover:opacity-100 transition-opacity">SERC ↗</a>
-        {/* Sprint 3 — robot connection badge */}
+        <TeachMode />
         <RobotConnect />
       </div>
 
@@ -405,18 +397,13 @@ const Index = () => {
                 wireMode={wireMode}
                 pendingPin={pendingPin}
                 onPinClick={handlePinClick}
+                selectedIndex={selectedIndex}
               />
 
               <div className="absolute top-3 right-3 z-30 flex gap-0.5 bg-black/80 border border-primary/30 rounded-lg p-1 shadow-2xl backdrop-blur-sm">
-                <button type="button" onClick={handleSaveProject} className={floatIconBtn} title="Save Project">
-                  <Icon.Save />
-                </button>
-                <button type="button" onClick={handleImport} className={floatIconBtn} title="Import a project JSON">
-                  <Icon.Import />
-                </button>
-                <button type="button" onClick={handleExport} className={floatIconBtn} title="Export all projects backup">
-                  <Icon.Export />
-                </button>
+                <button type="button" onClick={handleSaveProject} className={floatIconBtn} title="Save Project"><Icon.Save /></button>
+                <button type="button" onClick={handleImport} className={floatIconBtn} title="Import a project JSON"><Icon.Import /></button>
+                <button type="button" onClick={handleExport} className={floatIconBtn} title="Export all projects backup"><Icon.Export /></button>
               </div>
 
               <Minimap2D
@@ -424,7 +411,16 @@ const Index = () => {
                 wires={wires}
                 pcbWidthMm={PCB_PHYSICAL_MM.width}
                 pcbHeightMm={PCB_PHYSICAL_MM.height}
+                selectedIndex={selectedIndex}
+                onSelect={setSelectedIndex}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                unit={unit}
+                onUnitChange={setUnit}
+                collapsed={collapsed}
+                onCollapsedChange={setCollapsed}
                 onExport={handleExportRobotJob}
+                onExportBOM={handleExportBOM}
                 onRotate={handleRotateComponent}
                 onDelete={handleDeleteComponent}
                 onNudge={handleNudgeComponent}

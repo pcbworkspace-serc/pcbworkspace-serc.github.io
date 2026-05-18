@@ -1,238 +1,67 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { getDetection, getAlignmentCorrection, getValidation } from "@/lib/nn";
-import { grabCameraFrame } from "@/components/CameraFeed";
-
-const FLASK_URL = "https://pcbworkspace-backend.onrender.com";
-
-const LANGUAGES = [
-  { code:"en", name:"English", flag:"🇺🇸" },
-  { code:"es", name:"Español", flag:"🇪🇸" },
-  { code:"fr", name:"Français", flag:"🇫🇷" },
-  { code:"de", name:"Deutsch", flag:"🇩🇪" },
-  { code:"pt", name:"Português", flag:"🇧🇷" },
-  { code:"it", name:"Italiano", flag:"🇮🇹" },
-  { code:"zh", name:"中文", flag:"🇨🇳" },
-  { code:"ja", name:"日本語", flag:"🇯🇵" },
-  { code:"ko", name:"한국어", flag:"🇰🇷" },
-  { code:"ar", name:"العربية", flag:"🇸🇦" },
-  { code:"ru", name:"Русский", flag:"🇷🇺" },
-  { code:"hi", name:"हिन्दी", flag:"🇮🇳" },
-  { code:"nl", name:"Nederlands", flag:"🇳🇱" },
-  { code:"tr", name:"Türkçe", flag:"🇹🇷" },
-  { code:"pl", name:"Polski", flag:"🇵🇱" },
-  { code:"sv", name:"Svenska", flag:"🇸🇪" },
-  { code:"da", name:"Dansk", flag:"🇩🇰" },
+import { sendSerialCommand, getSerialStatus } from "@/lib/serial";
+type Message = { role: "user"|"assistant"; content: string; };
+type KBEntry = { keywords: string[]; answer: string };
+const KB: KBEntry[] = [
+  { keywords:["resistor","resistance","ohm","ohms law"], answer:"Great question! Resistors are fundamental to every circuit you will ever design. Ohm's Law ties it all together: V = I x R\n• Power dissipated: P = I²R = V²/R\n• Series: R_total = R1 + R2 (they add up)\n• Parallel: 1/R_total = 1/R1 + 1/R2 (total is always less than the smallest)\n• 4-band color code: Blk=0 Brn=1 Red=2 Org=3 Yel=4 Grn=5 Blu=6 Vio=7 Gry=8 Wht=9\nOnce you memorize the color code, reading resistors becomes second nature!\nSource: Sedra & Smith, Microelectronic Circuits Ch.1" },
+  { keywords:["capacitor","capacitance","farad","decoupling","bypass"], answer:"Capacitors are endlessly useful — they show up in almost every subsystem you will work with. C = Q/V\n• Energy stored: E = 0.5CV²\n• Impedance: Z = 1/(jwC) — short circuit at high frequencies, open at DC\n• Series: 1/C = 1/C1 + 1/C2 | Parallel: C = C1 + C2\n• One of the most impactful things you can do on a PCB: place a 100nF decoupling cap within 1mm of every IC power pin. It genuinely makes a difference.\n• Electrolytic caps are polarized — longer lead is positive, never reverse them.\nSource: Horowitz & Hill, The Art of Electronics Ch.1" },
+  { keywords:["inductor","inductance","henry","coil","choke"], answer:"Inductors resist changes in current — they are the complement to capacitors in almost every way.\n• Governing equation: V = L x dI/dt\n• Energy stored: E = 0.5LI²\n• Impedance: Z = jwL — open at high frequencies, short at DC (exactly opposite to a capacitor)\n• Essential for switching power supplies, EMI filters, and RF matching networks\n• Watch out for the self-resonant frequency — operating above it defeats the purpose.\nSource: Horowitz & Hill Ch.1" },
+  { keywords:["diode","pn junction","forward bias","rectifier","schottky","zener"], answer:"Diodes are one of the most elegant components in electronics — current flows in one direction only.\n• Forward voltage: ~0.7V silicon, ~0.3V Schottky, 1.8-3.5V for LEDs\n• Zener diodes conduct in reverse at a defined breakdown voltage — excellent for voltage clamping and regulation\n• Schottky diodes switch faster and have lower Vf — preferred for high-speed and power applications\n• Polarity matters! Mark the cathode band clearly on your silkscreen — it is a simple step that prevents a frustrating mistake.\nSource: Sedra & Smith Ch.3" },
+  { keywords:["transistor","bjt","mosfet","npn","pnp","amplifier","switch","fet"], answer:"Transistors are the foundation of modern electronics — every processor, amplifier, and power switch relies on them.\n**BJT (current-controlled):** Ic = Beta x Ib\n• NPN: Vbe ~0.7V to turn on | Beta typically 50-500\n**MOSFET (voltage-controlled):**\n• NMOS: requires Vgs > Vth to conduct (typically 1-3V)\n• Near-zero gate current makes MOSFETs ideal for power switching\n• PCB tip: a 10-33 ohm gate resistor with short gate traces prevents oscillation — a small detail with real impact.\nSource: Sedra & Smith Ch.4-5" },
+  { keywords:["led","light emitting","brightness","current limiting"], answer:"LEDs require a current-limiting resistor — without one, they will draw too much current and fail quickly.\n• Forward voltage: Red 1.8-2.2V | Green 2-3.5V | Blue/White 3-3.5V\n• Typical operating current: 10-20mA\n• Resistor formula: R = (Vsupply - Vf) / I_LED\n• Example: 5V supply, red LED (Vf=2V), 20mA → R = (5-2)/0.02 = 150 ohm\n• Identification: longer lead = anode (+), flat edge on dome = cathode (-)\nSource: Horowitz & Hill Ch.2" },
+  { keywords:["pcb","printed circuit","trace","via","layer","gerber","copper"], answer:"PCB design is where theory meets hardware — getting the fundamentals right here pays dividends throughout the project.\n• Trace width: IPC-2221 is your reference — 1oz copper, 1A → ~0.25mm on external layer\n• Clearance: 0.1mm minimum for low-voltage signals, more for anything higher\n• Vias: 0.3mm minimum drill, 0.6mm pad for standard fab\n• A solid ground plane on an inner layer is one of the best investments you can make for EMI performance\n• Always include 3 fiducial markers for pick-and-place alignment — this robot uses them!\nSource: IPC-2221 Standard, Grover & Ghassemi PCB Design Techniques" },
+  { keywords:["smd","surface mount","reflow","solder","paste","soldering","assembly"], answer:"SMT assembly is a precise process — small variations in paste volume or thermal profile can affect yield significantly.\n• Reflow profile: Preheat 150°C → Soak → Peak 220-250°C (SAC305 lead-free) → Controlled cool\n• Stencil thickness: 0.12mm for 0402 components, 0.15mm for larger\n• Tombstoning occurs when heating is uneven or pads are asymmetric — balanced pad design prevents it\n• This robot arm places components with sub-millimeter accuracy using JEPA vision correction — that is exactly what the alignment system is for.\nSource: IPC-7711, J-STD-001" },
+  { keywords:["opamp","op-amp","operational amplifier","gain","feedback"], answer:"Op-amps are remarkably versatile — with the right feedback network, a single device can amplify, filter, compare, or buffer.\n• Inverting: Vout = -(Rf/Rin) x Vin\n• Non-inverting: Vout = (1 + Rf/Rin) x Vin\n• Unity-gain buffer: Vout = Vin — invaluable for impedance isolation\n• Virtual ground principle: V+ = V- in negative feedback — understanding this unlocks most op-amp analysis\n• PCB tip: a small capacitor (100pF) across the feedback resistor improves phase margin. Always bypass supply pins with 100nF.\nSource: Sedra & Smith Ch.2" },
+  { keywords:["power supply","ldo","buck","boost","regulator","switching","voltage"], answer:"Choosing the right power topology early saves significant redesign effort later.\n• LDO: Vout = Vref x (1 + R1/R2) | Simple, low noise, but efficiency = Vout/Vin — excess becomes heat\n• Buck (step-down): Vout = D x Vin | 85-95% efficient — the right choice for most battery-powered designs\n• Boost (step-up): Vout = Vin/(1-D)\n• PCB tip: minimize the switching loop area, place input capacitors close to the switch node, and use wide traces for high-current paths.\nSource: Razavi Ch.11, Texas Instruments Power Design Seminar" },
+  { keywords:["filter","low pass","high pass","cutoff","rc filter","lc filter"], answer:"Filters are essential for signal conditioning, noise rejection, and power supply design.\n• RC Low-Pass: fc = 1/(2*pi*R*C) | -20dB/decade rolloff above fc\n• RC High-Pass: same formula, passes frequencies above fc\n• LC Low-Pass: fc = 1/(2*pi*sqrt(LC)) | -40dB/decade — sharper rolloff\n• Butterworth: maximally flat passband, good general-purpose choice\n• Chebyshev: steeper rolloff at the cost of passband ripple\n• Higher-order filters give steeper rolloff but add component count and complexity.\nSource: Horowitz & Hill Ch.1" },
+  { keywords:["uart","i2c","spi","serial","protocol","communication","can"], answer:"Choosing the right protocol comes down to speed, pin count, and distance requirements.\n• UART: asynchronous, 2 wires, 9600-115200 baud — simple and universally supported\n• I2C: 2 wires, multi-device on one bus, requires 4.7k pull-ups, up to 1MHz\n• SPI: 4 wires, full duplex, up to 50MHz+ — fastest and simplest electrically, one CS per device\n• CAN: differential pair, 120 ohm termination at each end, up to 1Mbps — robust in electrically noisy environments\n• For high-speed SPI: match trace impedance and keep clock lines short.\nSource: Horowitz & Hill Ch.14" },
+  { keywords:["ground","grounding","emi","noise","plane","star ground"], answer:"Grounding strategy is one of the most overlooked aspects of PCB design — and one of the most consequential.\n• A continuous ground plane on an inner layer dramatically reduces impedance and EMI\n• Star ground: bring all grounds to a single point — best for mixed analog and digital designs\n• Decoupling: 100nF ceramic at every IC power pin, plus 10uF bulk per power domain\n• Never route a high-speed signal over a break in the ground plane — the return current has nowhere clean to go\n• Guard rings around sensitive analog circuits help reject interference from nearby digital signals.\nSource: Ott, Electromagnetic Compatibility Engineering" },
+  { keywords:["jepa","neural network","alignment","vision","camera","machine learning","ai"], answer:"The JEPA Vision System is the intelligence behind this robot arm — and it is genuinely interesting technology.\n• JEPA stands for Joint Embedding Predictive Architecture, developed by Yann LeCun at Meta AI\n• It learns PCB board structure from unlabeled camera footage — no hand-labeling required for pretraining\n• Three specialized inference heads:\n  1. ComponentDetector — locates fiducials, classifies component types from the top camera\n  2. AlignmentCorrector — computes the rotation and XY offset needed before each placement\n  3. PlacementValidator — compares pre and post placement frames to verify success\n• Achieves less than 2 degree rotation error and less than 0.2mm positional error\n• Click JEPA Vision in the sidebar to run alignment live, or try the Demo to see the full pipeline." },
+  { keywords:["place","placement","put","add","drag","drop"], answer:"Placing components on the board is straightforward.\n1. Locate the component in the Inventory panel on the left\n2. Click and drag it onto the PCB board\n3. Release to drop it at that position\nAvailable components: Resistor, Diode, Capacitor, LED, Transistor, Channel Port\nIn a real assembly workflow, this robot arm would pick and place each component using the JEPA vision system for sub-millimeter accuracy." },
+  { keywords:["robot command","robot control","drive robot","control the robot","control robot","what can the robot do","robot commands"], answer:"You can drive the SCARA arm directly from this chat once connected. Click the **Connect Robot** badge in the top bar (top-right) first — it opens a USB port picker.\n\n**Things you can type to me:**\n• `home` — return to home position\n• `move 10 20` — go to X=10mm, Y=20mm (add a 3rd or 4th number for Z and rotation)\n• `pick` / `place` — gripper close / open\n• `rotate 90` — rotate end-effector by 90°\n• `stop` — emergency halt\n• `scan`, `detect`, `align`, `validate` — task verbs\n\nResponses from the robot show up in the serial console — click the green badge in the top bar after connecting." },
+  { keywords:["help","what can","commands","tutorial","how"], answer:"Happy to help! Here is what I can assist with:\n• Electronics theory — resistors, capacitors, inductors, transistors, op-amps, diodes\n• PCB design — trace width, clearance, via sizing, impedance, grounding, EMI\n• Assembly — SMT reflow, solder paste, component placement\n• Communication protocols — UART, I2C, SPI, CAN\n• Power electronics — LDO, buck, boost, filtering\n• The JEPA Vision System — how this robot arm uses AI for precision placement\n• Component placement — drag items from Inventory onto the board\n• **Driving the SCARA robot** — type `home`, `move 10 20`, `pick`, `place`, etc. (connect the robot first via the top-bar badge)\n\nSome questions to try:\n  How do I calculate an LED current-limiting resistor?\n  What is the difference between I2C and SPI?\n  How does a buck converter work?" },
 ];
-
-const SYSTEM_PROMPT = (lang: string) => `You are Layla, an expert PCB design assistant and robot co-pilot for SERC (Space Engineering Research Center). You help students learn electronics by building any PCB project they can imagine using the robot arm.
-
-IMPORTANT: You MUST respond ONLY in ${lang}. All your responses must be in ${lang} regardless of what language the user writes in.
-
-You have deep knowledge of every category of PCB project including but not limited to:
-
-SENSING & MEASUREMENT:
-- Altimeters (BMP390, MS5611 - barometric pressure, altitude)
-- IMU boards (MPU6050, MPU9250, BNO055 - accelerometer, gyro, magnetometer)
-- Environmental stations (BME680, SHT31, CCS811 - temp, humidity, air quality, CO2)
-- GPS trackers (NEO-M8N, ZOE-M8Q - position, speed, time)
-- Ultrasonic rangefinders (HC-SR04, TFmini LiDAR)
-- Load cell amplifiers (HX711 - weight sensing)
-- Current/power monitors (INA219, INA3221 - voltage, current, power)
-- Thermocouple interfaces (MAX31855, MAX31865 - high temp sensing)
-- Hall effect sensor boards (ACS712, DRV5053 - current, position)
-- Geiger counter circuits (high voltage, pulse detection)
-- Seismic sensors (ADXL355 - low noise accelerometer)
-
-POWER ELECTRONICS:
-- Buck converters (LM2596, TPS54340, MP1584 - step down)
-- Boost converters (MT3608, XL6009, TPS61023 - step up)
-- Buck-boost converters (TPS63020, LTC3780)
-- LDO regulators (AMS1117, MCP1700, TLV1117)
-- Battery chargers (TP4056, MCP73831, BQ24079)
-- Battery management systems (BQ29700, DW01, S-8261)
-- MPPT solar chargers (CN3791, BQ24650)
-- Wireless charging (WPC Qi, BQ51013)
-
-MOTOR CONTROL:
-- DC motor drivers (L298N, DRV8833, TB6612FNG)
-- BLDC controllers (DRV8302, VESC, SimpleFOC)
-- Stepper motor drivers (A4988, DRV8825, TMC2209, TMC2130)
-- Servo controllers (PCA9685 - 16ch PWM)
-- Brushless ESC design (FETs, gate drivers, back-EMF sensing)
-
-COMMUNICATION & CONNECTIVITY:
-- USB interfaces (CH340, CP2102, FTDI)
-- USB-C power delivery (FUSB302, STUSB4500)
-- CAN bus interfaces (MCP2515, SN65HVD230, TJA1050)
-- RS485/RS422 (MAX485, SP3485)
-- Ethernet (W5500, LAN8720)
-- WiFi modules (ESP8266, ESP32)
-- Bluetooth (nRF52840, CC2640 - BLE 5.0)
-- LoRa long range (SX1276, RFM95W)
-- NFC/RFID (PN532, MFRC522)
-- UWB positioning (DW1000, DW3000)
-
-MICROCONTROLLER & PROCESSOR BOARDS:
-- STM32 breakouts (F103, F411, G474)
-- ESP32 custom boards (WROOM, WROVER)
-- RP2040 boards (Raspberry Pi silicon)
-- SAMD21/SAMD51 (Arduino compatible)
-- nRF52840 boards (Nordic - BLE + USB)
-- FPGA boards (iCE40, ECP5, Xilinx Spartan)
-- RISC-V boards (GD32VF103, ESP32-C3)
-
-AUDIO:
-- Class D amplifiers (TPA3116, TPA3118, MAX98357)
-- Class AB amplifiers (LM386, TDA2030, TPA6120)
-- Headphone amplifiers (OPA2134, NE5532, AD8397)
-- DAC boards (PCM5102, ES9038, AK4493)
-- MEMS microphone arrays (SPH0645, ICS-43434)
-- Guitar effects pedals (op-amp circuits, clipping, filtering)
-- Synthesizer VCO/VCF circuits (analog, CEM3340)
-
-DISPLAY & LIGHTING:
-- LED matrix drivers (IS31FL3741, HT16K33, MAX7219)
-- Addressable LED controllers (WS2812B, SK6812, APA102)
-- OLED display interfaces (SSD1306, SH1106)
-- TFT display drivers (ILI9341, ST7789)
-- E-ink display interfaces (GDEW042T2, UC8151)
-- High power LED drivers (constant current, dimmable)
-
-ROBOTICS & AUTOMATION:
-- Encoder interfaces (quadrature, differential, AB/Z)
-- End effector control (gripper, vacuum, electromagnet)
-- Robot joint controllers (torque control, impedance)
-- Vision system interfaces (camera modules, CSI/MIPI)
-- Drone ESC and flight controller boards
-- Autonomous vehicle sensor fusion boards
-
-BIOMEDICAL & WEARABLE:
-- ECG/EKG front ends (INA128, AD8232)
-- EMG amplifiers (instrumentation amp, band-pass filter)
-- Pulse oximeters (MAX30102 - SpO2, heart rate)
-- EEG interfaces (ADS1299 - neural signals)
-- Galvanic skin response (GSR sensor circuit)
-- Smart watch circuits (display, battery, BLE, sensors)
-
-INDUSTRIAL & TEST EQUIPMENT:
-- Signal generators (DDS - AD9833, AD9850)
-- LCR meters (AC bridge circuits)
-- Logic analyzers (FPGA based, parallel capture)
-- Thermal cameras (MLX90640 array)
-- Oscilloscope front ends (attenuator, buffer, ADC)
-
-ROBOT ARM CAPABILITIES:
-- pick: grab a component from the tray
-- place: place component on the board
-- move: move arm to position
-- align: run CNN vision alignment correction
-- scan: scan board with top camera
-- rotate: rotate component by angle
-- release: release gripper
-- detect: use CNN to identify component
-- validate: use CNN to verify placement
-
-CRITICAL RULES:
-1. Always respond in ${lang} only.
-2. When suggesting a physical robot action, ALWAYS end your message with EXACTLY this on its own line:
-ROBOT_CMD: {"action": "pick", "component": "BMP390", "slot": "A1", "description": "picking BMP390 sensor"}
-3. When user says ok/yes/execute/go ahead/okay do that, respond with ONLY:
-EXECUTING: Sending command to robot arm.
-ROBOT_CMD: {"action": "the_action", "component": "name", "description": "description"}
-4. Never say you cannot control the robot. You ARE the robot controller interface.
-5. Walk through ONE step at a time.
-6. You can help build ANYTHING in electronics.
-7. Be encouraging - students are learning!`;
-
-const SUPABASE_URL = "https://khqvffquritcnznusfcp.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtocXZmZnF1cml0Y256bnVzZmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMTUyODUsImV4cCI6MjA4NzY5MTI4NX0.PNkqYM41fpff_Dr6h-9nnZyEDnlLMijsRaFlv7Aei9A";
-
-function extractRobotCmd(text: string): { cmd: object; cleanText: string } | null {
-  const match = text.match(/ROBOT_CMD:\s*(\{[^}]+\})/);
-  if (!match) return null;
-  try {
-    const cmd = JSON.parse(match[1]);
-    const cleanText = text.replace(/ROBOT_CMD:\s*\{[^}]+\}/, "").replace("EXECUTING: Sending command to robot arm.", "").trim();
-    return { cmd, cleanText };
-  } catch {
-    return null;
-  }
-}
-
-async function sendRobotCommand(cmd: object): Promise<{ok: boolean; message: string}> {
-  try {
-    const res = await fetch(`${FLASK_URL}/command`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cmd),
-      signal: AbortSignal.timeout(3000),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return { ok: true, message: data.message ?? "Command executed." };
-    }
-    return { ok: false, message: "Robot rejected the command." };
-  } catch {
-    return { ok: false, message: "Robot not connected. Command queued for when hardware is online." };
-  }
-}
-
-// ── CNN command handler ────────────────────────────────────────────────────
-async function handleCNNCommand(text: string): Promise<string | null> {
-  const lower = text.toLowerCase();
-  try {
-    const frame = await grabCameraFrame(); // grab real camera frame if available
-    if (lower.includes("detect")) {
-      const r = await getDetection(frame);
-      const src = frame ? "📷 live camera" : "🔲 dummy tensor";
-      return `🔍 **CNN Detection Result** (${src}):\nComponent: **${r.class_name}**\nConfidence: ${(r.confidence * 100).toFixed(1)}%\nBBox: cx=${r.bbox[0].toFixed(3)} cy=${r.bbox[1].toFixed(3)} w=${r.bbox[2].toFixed(3)} h=${r.bbox[3].toFixed(3)}\n⏱ ${r.inference_ms}ms`;
-    }
-    if (lower.includes("align")) {
-      const r = await getAlignmentCorrection(frame);
-      const src = frame ? "📷 live camera" : "🔲 dummy tensor";
-      return `📐 **CNN Alignment Correction** (${src}):\nΔθ = ${r.delta_theta_deg.toFixed(2)}°\nΔx = ${r.delta_x_mm.toFixed(3)} mm\nΔy = ${r.delta_y_mm.toFixed(3)} mm\n⏱ ${r.inference_ms}ms`;
-    }
-    if (lower.includes("validate")) {
-      const r = await getValidation(frame);
-      const src = frame ? "📷 live camera" : "🔲 dummy tensor";
-      const icon = r.decision === "PASS" ? "✅" : "❌";
-      return `${icon} **CNN Validation: ${r.decision}** (${src})\nPass: ${(r.pass_prob * 100).toFixed(1)}%  Fail: ${(r.fail_prob * 100).toFixed(1)}%\n⏱ ${r.inference_ms}ms`;
-    }
-  } catch {
-    return "⚠️ CNN server offline. Make sure flask_server.py is running at https://pcbworkspace-backend.onrender.com";
-  }
+function findAnswer(input: string): string | null {
+  const lower = input.toLowerCase();
+  for (const e of KB) { if (e.keywords.some(k => lower.includes(k))) return e.answer; }
   return null;
 }
 
-function LanguagePicker({ onSelect }: { onSelect: (lang: string) => void }) {
-  return (
-    <div className="flex flex-col h-full items-center justify-center p-4">
-      <div className="text-center mb-6">
-        <div className="font-bold text-lg text-white mb-1">PCB <span style={{color:"#00d4ff"}}>Robot</span></div>
-        <div className="text-white/60 text-sm">Select your language to start</div>
-      </div>
-      <div className="grid grid-cols-2 gap-2 w-full max-w-xs">
-        {LANGUAGES.map(l => (
-          <button
-            key={l.code}
-            type="button"
-            onClick={() => onSelect(l.name)}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-[#00d4ff]/10 hover:border-[#00d4ff]/40 transition-colors text-left"
-          >
-            <span className="text-lg">{l.flag}</span>
-            <span className="text-sm text-white/80">{l.name}</span>
-          </button>
-        ))}
-      </div>
-    </div>
+/**
+ * Detect natural-language robot commands in chat input.
+ * Returns a serial-protocol line if matched, or null otherwise.
+ * Robot commands are checked BEFORE the knowledge base — they take priority.
+ */
+function parseRobotCommand(text: string): string | null {
+  const t = text.toLowerCase().trim();
+  if (/^(go )?home$/.test(t))                                          return "HOME";
+  if (/^(emergency )?stop$/.test(t) || t === "halt")                   return "STOP";
+  if (/^pick( up)?$/.test(t))                                          return "PICK";
+  if (/^(place|release|drop)$/.test(t))                                return "PLACE";
+
+  const rot = t.match(/^rotate\s+(-?\d+(?:\.\d+)?)\s*(?:deg|degrees?)?$/);
+  if (rot) return `ROTATE ${rot[1]}`;
+
+  // move 10 20  /  move to 10, 20  /  goto 10 20 0 90
+  const move = t.match(
+    /^(?:move|move to|go to|goto)\s+(-?\d+(?:\.\d+)?)\s*,?\s+(-?\d+(?:\.\d+)?)(?:\s+(-?\d+(?:\.\d+)?))?(?:\s+(-?\d+(?:\.\d+)?))?$/
   );
+  if (move) {
+    const x = move[1], y = move[2], z = move[3] ?? "0", r = move[4] ?? "0";
+    return `MOVE X${x} Y${y} Z${z} R${r}`;
+  }
+
+  const single = t.match(/^(scan|detect|align|validate)$/);
+  if (single) return single[1].toUpperCase();
+
+  return null;
 }
 
-function RenderMsg({ content, pendingCmd }: { content: string; pendingCmd?: object }) {
+function RenderMsg({ content }: { content: string }) {
   return (
     <div className="space-y-0.5">
       {content.split("\n").map((line, i) => (
-        <p key={i} className={["text-sm leading-relaxed", line.startsWith("-") || line.startsWith(" ") ? "pl-2" : ""].join(" ")}>
+        <p key={i} className={["text-sm leading-relaxed", line.startsWith("•") || line.startsWith(" ") ? "pl-2" : ""].join(" ")}>
           {line.split(/(\*\*[^*]+\*\*)/).map((part, j) =>
             part.startsWith("**") && part.endsWith("**")
               ? <strong key={j} className="text-white">{part.slice(2,-2)}</strong>
@@ -240,193 +69,80 @@ function RenderMsg({ content, pendingCmd }: { content: string; pendingCmd?: obje
           )}
         </p>
       ))}
-      {pendingCmd && (
-        <div className="mt-2 p-2 rounded border border-[#10b981]/40 bg-[#10b981]/10 text-[#10b981] text-[10px] font-mono">
-          <p className="font-bold mb-1">Robot command ready:</p>
-          <p>{JSON.stringify(pendingCmd)}</p>
-          <p className="text-white/50 mt-1">Say "okay do that" to execute</p>
-        </div>
-      )}
     </div>
   );
 }
-
 export default function PCBRobot() {
-  const [language, setLanguage] = useState<string | null>(null);
-  const [messages, setMessages] = useState<{role:"user"|"assistant";content:string;pendingCmd?:object}[]>([]);
+  const [visible, setVisible] = useState(true);
+  const [messages, setMessages] = useState<Message[]>([{ role:"assistant", content:"Hi! I am Layla, your PCB design assistant. I can help with electronics theory, PCB design rules, component placement, communication protocols, and the JEPA vision system.\n\nI can also drive the SCARA robot — just connect it via the badge in the top bar, then try things like `home`, `move 20 15`, or `pick`.\n\nFeel free to ask anything — try \"How does a capacitor work?\" or \"What is the difference between I2C and SPI?\"" }]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [robotStatus, setRobotStatus] = useState<"unknown"|"online"|"offline">("unknown");
   const bottomRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior:"smooth" }); }, [messages]);
-
-  useEffect(() => {
-    fetch(`${FLASK_URL}/health`, { signal: AbortSignal.timeout(2000) })
-      .then(r => setRobotStatus(r.ok ? "online" : "offline"))
-      .catch(() => setRobotStatus("offline"));
-  }, []);
-
-  function handleLanguageSelect(lang: string) {
-    setLanguage(lang);
-    setMessages([]);
-    setBusy(true);
-    const introPrompt = "Introduce yourself briefly and tell the student you can help them build anything in electronics using the robot arm. Keep it to 3 sentences max. Respond only in " + lang + ".";
-    fetch(SUPABASE_URL + "/functions/v1/layla-chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + SUPABASE_ANON_KEY },
-      body: JSON.stringify({ system: SYSTEM_PROMPT(lang), messages: [{ role: "user", content: introPrompt }] }),
-    })
-    .then(r => r.json())
-    .then(data => {
-      const reply = (data.content?.[0]?.text) ?? "Hi! I am Layla. Tell me what you want to build!";
-      setMessages([{ role: "assistant", content: reply }]);
-      setBusy(false);
-    })
-    .catch(() => {
-      setMessages([{ role: "assistant", content: "Hi! I am Layla. Tell me what you want to build!" }]);
-      setBusy(false);
-    });
-  }
-
   const send = useCallback(async () => {
     const text = input.trim();
-    if (!text || busy || !language) return;
-    setInput("");
-    setBusy(true);
+    if (!text || busy) return;
+    setInput(""); setBusy(true);
+    setMessages(prev => [...prev, { role:"user", content:text }]);
 
-    const isExecuteCmd = /okay do that|execute|run that|do it|yes do it|go ahead|send command|^yes$/i.test(text);
-    const lastCmd = [...messages].reverse().find(m => m.pendingCmd)?.pendingCmd;
-
-    // ── Execute pending robot command ──────────────────────────────────────
-    if (isExecuteCmd && lastCmd) {
-      setMessages(prev => [...prev, { role: "user", content: text }]);
-      const result = await sendRobotCommand(lastCmd);
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: result.ok
-          ? `Command sent! ${result.message}\n\nReady for the next step - say "next" to continue.`
-          : `${result.message}\n\nReady to continue planning - say "next step" to keep going.`,
-      }]);
-      setBusy(false);
-      return;
-    }
-
-    // ── CNN commands: detect / align / validate ────────────────────────────
-    const cnnReply = await handleCNNCommand(text);
-    if (cnnReply) {
-      setMessages(prev => [...prev, { role: "user", content: text }, { role: "assistant", content: cnnReply }]);
-      setBusy(false);
-      return;
-    }
-
-    // ── Normal Layla/Supabase chat ─────────────────────────────────────────
-    const newMessages = [...messages.map(m => ({ role: m.role as "user"|"assistant", content: m.content })), { role: "user" as const, content: text }];
-    setMessages(prev => [...prev, { role: "user", content: text }]);
-
-    try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/layla-chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          system: SYSTEM_PROMPT(language),
-          messages: newMessages,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const rawReply = data.content?.[0]?.text ?? "Sorry, I could not generate a response.";
-        const extracted = extractRobotCmd(rawReply);
-        if (extracted) {
-          setMessages(prev => [...prev, { role: "assistant", content: extracted.cleanText, pendingCmd: extracted.cmd }]);
-        } else {
-          setMessages(prev => [...prev, { role: "assistant", content: rawReply }]);
-        }
-      } else {
-        setMessages(prev => [...prev, { role: "assistant", content: "Sorry, I am having trouble connecting right now. Please try again." }]);
+    // 1) Robot command? Always tried first.
+    const robotLine = parseRobotCommand(text);
+    if (robotLine) {
+      if (getSerialStatus() !== "connected") {
+        setMessages(prev => [...prev, { role:"assistant", content:`That looks like a robot command, but the robot isn't connected yet.\n\nClick the **Connect Robot** badge in the top bar (top-right) — pick your ESP32 from the port picker — then try again.` }]);
+        setBusy(false); return;
       }
-    } catch {
-      setMessages(prev => [...prev, { role: "assistant", content: "Sorry, I could not reach the AI service. Please check your connection and try again." }]);
+      try {
+        await sendSerialCommand(robotLine);
+        setMessages(prev => [...prev, { role:"assistant", content:`🤖 Sent: \`${robotLine}\`\n\nWatch the green badge in the top bar for the robot's response.` }]);
+      } catch (e) {
+        setMessages(prev => [...prev, { role:"assistant", content:`Robot error: ${e instanceof Error ? e.message : "send failed"}` }]);
+      }
+      setBusy(false); return;
     }
 
+    // 2) Local KB lookup
+    const kb = findAnswer(text);
+    if (kb) {
+      await new Promise(r => setTimeout(r, 350));
+      setMessages(prev => [...prev, { role:"assistant", content:kb }]);
+      setBusy(false); return;
+    }
+
+    // 3) Fallback to local Flask chat server, if running
+    try {
+      const res = await fetch("http://127.0.0.1:5000/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({message:text}), signal:AbortSignal.timeout(4000) });
+      if (res.ok) { const d = await res.json() as {reply?:string}; setMessages(prev=>[...prev,{role:"assistant",content:d.reply??"No response."}]); setBusy(false); return; }
+    } catch {}
+
+    // 4) Generic miss
+    setMessages(prev => [...prev, { role:"assistant", content:`That one is outside my current knowledge base, but it is a good question worth researching further.\n\nI can help with: resistors, capacitors, transistors, op-amps, PCB design rules, communication protocols (UART, I2C, SPI), power supplies, the JEPA vision system, and driving the SCARA robot (try \`home\`, \`move 10 20\`, \`pick\`, \`place\`).\n\nIs there something along those lines I can help with?` }]);
     setBusy(false);
-  }, [input, busy, messages, language]);
-
-  if (!language) {
-    return (
-      <div className="flex flex-col h-full">
-        <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 shrink-0">
-          <div>
-            <div className="font-bold text-sm text-white">PCB <span style={{color:"#00d4ff"}}>Robot</span></div>
-            <div className="text-[9px] text-white/40 uppercase tracking-widest">Layla - Your EE Assistant</div>
-          </div>
-          <div className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${robotStatus === "online" ? "bg-[#10b981]/20 text-[#10b981]" : "bg-red-500/20 text-red-400"}`}>
-            {robotStatus === "online" ? "Robot Online" : "Robot Offline"}
-          </div>
-        </div>
-        <LanguagePicker onSelect={handleLanguageSelect} />
-      </div>
-    );
-  }
-
+  }, [input, busy]);
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 shrink-0">
-        <div>
-          <div className="font-bold text-sm text-white">PCB <span style={{color:"#00d4ff"}}>Robot</span></div>
-          <div className="text-[9px] text-white/40 uppercase tracking-widest">Layla - Your EE Assistant</div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => setLanguage(null)} className="text-[9px] text-white/30 hover:text-white/60">
-            {LANGUAGES.find(l => l.name === language)?.flag} {language}
-          </button>
-          <div className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${robotStatus === "online" ? "bg-[#10b981]/20 text-[#10b981]" : "bg-red-500/20 text-red-400"}`}>
-            {robotStatus === "online" ? "Robot Online" : "Robot Offline"}
-          </div>
-        </div>
+        <div className="font-bold text-white">PCB <span style={{color:"#00d4ff"}}>Robot</span></div>
+        <button type="button" onClick={()=>setVisible(v=>!v)} className="text-xs px-3 py-1 rounded border border-white/20 text-white/70 hover:bg-white/10 transition-colors">{visible?"Hide Robot":"Show Robot"}</button>
       </div>
-      <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
-        {messages.map((m,i) => (
-          <div key={i} className={m.role==="user"?"text-right":"text-left"}>
-            <div className={["inline-block max-w-[92%] px-3 py-2 rounded-lg text-left", m.role==="user"?"bg-[#00d4ff]/15 text-[#00d4ff]":"bg-black/30 text-white/85"].join(" ")}>
-              <div className="text-[10px] opacity-60 mb-1">{m.role==="user"?"you:":"Layla:"}</div>
-              <RenderMsg content={m.content} pendingCmd={m.pendingCmd} />
-            </div>
-          </div>
-        ))}
-        {busy && (
-          <div className="text-left">
-            <div className="inline-block px-3 py-2 rounded-lg bg-black/30">
-              <div className="flex gap-1">
-                {[0,1,2].map(i=><div key={i} className="w-1.5 h-1.5 bg-[#00d4ff]/60 rounded-full animate-bounce" style={{animationDelay:`${i*150}ms`}}/>)}
+      {visible && <>
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
+          {messages.map((m,i) => (
+            <div key={i} className={m.role==="user"?"text-right":"text-left"}>
+              <div className={["inline-block max-w-[92%] px-3 py-2 rounded-lg text-left", m.role==="user"?"bg-[#00d4ff]/15 text-[#00d4ff]":"bg-black/30 text-white/85"].join(" ")}>
+                <div className="text-[10px] opacity-60 mb-1">{m.role==="user"?"you:":"Layla:"}</div>
+                <RenderMsg content={m.content} />
               </div>
             </div>
-          </div>
-        )}
-        <div ref={bottomRef}/>
-      </div>
-      <div className="p-3 border-t border-white/10 flex gap-2 shrink-0">
-        <input
-          value={input}
-          onChange={e=>setInput(e.target.value)}
-          onKeyDown={e=>{if(e.key==="Enter")send();}}
-          className="flex-1 rounded-md px-3 py-2 text-sm bg-[#e8f3ff] text-[#001524] border border-[#00d4ff]/30 focus:outline-none focus:ring-2 focus:ring-[#00d4ff]/30"
-          placeholder="detect / align / validate or ask anything..."
-          disabled={busy}
-        />
-        <button
-          type="button"
-          onClick={send}
-          disabled={busy||!input.trim()}
-          className="px-4 py-2 rounded-md font-semibold text-sm bg-[#00d4ff] text-[#001524] hover:bg-[#00b8d9] disabled:opacity-50 transition-colors"
-        >
-          {busy?"...":"Send"}
-        </button>
-      </div>
+          ))}
+          {busy && <div className="text-left"><div className="inline-block px-3 py-2 rounded-lg bg-black/30"><div className="flex gap-1">{[0,1,2].map(i=><div key={i} className="w-1.5 h-1.5 bg-[#00d4ff]/60 rounded-full animate-bounce" style={{animationDelay:`${i*150}ms`}}/>)}</div></div></div>}
+          <div ref={bottomRef}/>
+        </div>
+        <div className="p-3 border-t border-white/10 flex gap-2 shrink-0">
+          <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")send();}} className="flex-1 rounded-md px-3 py-2 text-sm bg-[#e8f3ff] text-[#001524] border border-[#00d4ff]/30 focus:outline-none focus:ring-2 focus:ring-[#00d4ff]/30" placeholder="Ask Layla, or type a robot command…" disabled={busy}/>
+          <button type="button" onClick={send} disabled={busy||!input.trim()} className="px-4 py-2 rounded-md font-semibold text-sm bg-[#00d4ff] text-[#001524] hover:bg-[#00b8d9] disabled:opacity-50 transition-colors">{busy?"...":"Send"}</button>
+        </div>
+      </>}
     </div>
   );
 }

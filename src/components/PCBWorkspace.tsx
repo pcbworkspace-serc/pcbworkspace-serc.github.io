@@ -1,7 +1,8 @@
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, Grid } from "@react-three/drei";
 import * as THREE from "three";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { getPins } from "@/lib/pins";
 
 interface DroppedItem {
   type: string;
@@ -10,7 +11,6 @@ interface DroppedItem {
   rotation_deg?: number;
 }
 
-// PinRef + Wire match @/lib/wires shapes used by Index.tsx
 interface PinRef { componentIndex: number; pinName: string }
 interface Wire {
   id: string;
@@ -21,7 +21,6 @@ interface Wire {
 type PCBWorkspaceProps = {
   items?: DroppedItem[];
   onItemsChange?: (items: DroppedItem[]) => void;
-  // Sprint 2 will use these — Index.tsx passes them already.
   wires?: Wire[];
   wireMode?: boolean;
   pendingPin?: PinRef | null;
@@ -29,20 +28,14 @@ type PCBWorkspaceProps = {
 };
 
 // ── captureScene support ──────────────────────────────────────────────────────
-// The Detect button in Index.tsx calls captureScene() to grab a JPEG of the 3D
-// canvas when no webcam frame is available. We stash a module-level reference to
-// the underlying canvas element on mount so external callers can read it.
 let _activeCanvas: HTMLCanvasElement | null = null;
-
 export async function captureScene(): Promise<Blob | null> {
   const canvas = _activeCanvas;
   if (!canvas) return null;
-  return new Promise((resolve) => {
-    canvas.toBlob((b) => resolve(b), "image/jpeg", 0.9);
-  });
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.9));
 }
 
-/* ── Realistic Components ───────────────────────────────────────────────────── */
+// ── 3D component models (same as before) ─────────────────────────────────────
 
 function Resistor() {
   return (
@@ -177,26 +170,19 @@ function Transistor() {
   );
 }
 
-/* ── Detailed PCB Board ─────────────────────────────────────────────────────── */
-
 function PCBBoard() {
   const traces: { x: number; z: number; w: number; h: number }[] = [];
   for (let i = 0; i < 7; i++) traces.push({ x: 0, z: -1.4 + i * 0.48, w: 5.6, h: 0.04 });
   for (let i = 0; i < 11; i++) traces.push({ x: -2.5 + i * 0.5, z: 0, w: 0.04, h: 3.6 });
   const branchTraces = [
-    { x: -1.8, z: -0.6, w: 0.8, h: 0.03 },
-    { x: 1.2, z: 0.8, w: 1.2, h: 0.03 },
-    { x: -0.5, z: 1.2, w: 0.6, h: 0.03 },
-    { x: 2.0, z: -1.0, w: 0.5, h: 0.03 },
-    { x: -2.0, z: 0.5, w: 0.03, h: 0.7 },
-    { x: 1.5, z: -0.3, w: 0.03, h: 0.9 },
-    { x: 0.3, z: 0.6, w: 0.03, h: 0.5 },
-    { x: -1.0, z: -1.0, w: 0.03, h: 0.6 },
+    { x: -1.8, z: -0.6, w: 0.8, h: 0.03 }, { x: 1.2, z: 0.8, w: 1.2, h: 0.03 },
+    { x: -0.5, z: 1.2, w: 0.6, h: 0.03 }, { x: 2.0, z: -1.0, w: 0.5, h: 0.03 },
+    { x: -2.0, z: 0.5, w: 0.03, h: 0.7 }, { x: 1.5, z: -0.3, w: 0.03, h: 0.9 },
+    { x: 0.3, z: 0.6, w: 0.03, h: 0.5 }, { x: -1.0, z: -1.0, w: 0.03, h: 0.6 },
   ];
   const vias: [number, number][] = [];
-  for (let row = 0; row < 7; row++) {
+  for (let row = 0; row < 7; row++)
     for (let col = 0; col < 11; col++) vias.push([-2.5 + col * 0.5, -1.4 + row * 0.48]);
-  }
   const extraVias: [number, number][] = [
     [-1.8, -0.6], [1.2, 0.8], [-0.5, 1.2], [2.0, -1.0],
     [-2.0, 0.5], [1.5, -0.3], [0.3, 0.6], [-1.0, -1.0],
@@ -257,18 +243,6 @@ function PCBBoard() {
         <edgesGeometry args={[new THREE.BoxGeometry(6.2, 0.001, 4.2)]} />
         <lineBasicMaterial color="#ffffff" />
       </lineSegments>
-      {[
-        [-1.5, 0.5, 0.5, 0.3],
-        [1.0, -0.5, 0.4, 0.6],
-        [-0.5, -1.0, 0.7, 0.3],
-        [2.0, 0.5, 0.3, 0.3],
-        [-2.0, -0.5, 0.4, 0.4],
-      ].map(([sx, sz, sw, sh], i) => (
-        <lineSegments key={`silk-${i}`} position={[sx, -0.018, sz]}>
-          <edgesGeometry args={[new THREE.BoxGeometry(sw, 0.001, sh)]} />
-          <lineBasicMaterial color="rgba(255,255,255,0.5)" />
-        </lineSegments>
-      ))}
       {[[-2.8, -1.8], [-2.8, 1.8], [2.8, -1.8], [2.8, 1.8]].map(([mx, mz], i) => (
         <group key={`mount-${i}`}>
           <mesh position={[mx, -0.025, mz]}>
@@ -285,8 +259,6 @@ function PCBBoard() {
   );
 }
 
-/* ── Component selector ─────────────────────────────────────────────────────── */
-
 function PCBComponent({ label }: { label: string }) {
   switch (label) {
     case "Resistor":   return <Resistor />;
@@ -298,13 +270,86 @@ function PCBComponent({ label }: { label: string }) {
   }
 }
 
-/* ── Main Workspace ─────────────────────────────────────────────────────────── */
+// ── Pin position math ─────────────────────────────────────────────────────────
+// Given a component and pin name, return world position considering rotation.
+// y has the component group's -0.03 base offset baked in.
+function pinWorldPosition(item: DroppedItem, pinName: string): [number, number, number] | null {
+  const pins = getPins(item.type);
+  const pin = pins.find((p) => p.name === pinName);
+  if (!pin) return null;
+  const rotRad = ((item.rotation_deg ?? 0) * Math.PI) / 180;
+  const c = Math.cos(rotRad), s = Math.sin(rotRad);
+  const lx = pin.position[0], ly = pin.position[1], lz = pin.position[2];
+  const rx = lx * c - lz * s;
+  const rz = lx * s + lz * c;
+  return [item.x + rx, ly - 0.03, item.y + rz];
+}
 
-export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps) {
+// ── 3D wire (cylinder between two pins so it has visible thickness) ───────────
+function Wire3D({ start, end }: { start: [number, number, number]; end: [number, number, number] }) {
+  const { mid, len, quat } = useMemo(() => {
+    const a = new THREE.Vector3(...start);
+    const b = new THREE.Vector3(...end);
+    const dir = new THREE.Vector3().subVectors(b, a);
+    const len = dir.length();
+    const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
+    const quat = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      dir.clone().normalize(),
+    );
+    return { mid, len, quat };
+  }, [start, end]);
+
+  return (
+    <mesh position={mid.toArray()} quaternion={quat}>
+      <cylinderGeometry args={[0.014, 0.014, len, 8]} />
+      <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.35} roughness={0.4} />
+    </mesh>
+  );
+}
+
+// ── Pin sphere (clickable in wire mode, highlights when pending) ──────────────
+function PinSphere({
+  position, wireMode, isPending, onClick,
+}: {
+  position: [number, number, number];
+  wireMode: boolean;
+  isPending: boolean;
+  onClick: () => void;
+}) {
+  // Slightly raised so it's clearly visible above the component leads
+  const pos: [number, number, number] = [position[0], position[1] + 0.02, position[2]];
+  const radius = wireMode ? 0.05 : 0.022;
+  const color = isPending ? "#fbbf24" : wireMode ? "#10b981" : "#666666";
+  const emissive = isPending ? "#fbbf24" : wireMode ? "#10b981" : "#000000";
+  const intensity = isPending ? 1.2 : wireMode ? 0.5 : 0;
+  return (
+    <mesh
+      position={pos}
+      onClick={(e) => {
+        if (!wireMode) return;
+        e.stopPropagation();
+        onClick();
+      }}
+      onPointerOver={(e) => {
+        if (!wireMode) return;
+        document.body.style.cursor = "pointer";
+      }}
+      onPointerOut={() => {
+        document.body.style.cursor = "default";
+      }}
+    >
+      <sphereGeometry args={[radius, 12, 12]} />
+      <meshStandardMaterial color={color} emissive={emissive} emissiveIntensity={intensity} />
+    </mesh>
+  );
+}
+
+// ── Main Workspace ────────────────────────────────────────────────────────────
+export default function PCBWorkspace({
+  items, onItemsChange, wires, wireMode, pendingPin, onPinClick,
+}: PCBWorkspaceProps) {
   const [droppedItems, setDroppedItems] = useState<DroppedItem[]>(items ?? []);
-
-  // Sync from controlled prop. The parent (Index.tsx) is the source of truth —
-  // when it rotates / deletes an item, that flows back here via this effect.
   useEffect(() => { if (items) setDroppedItems(items); }, [items]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -330,7 +375,6 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
       <Canvas
         camera={{ position: [4, 5, 4], fov: 50 }}
         shadows
-        // preserveDrawingBuffer keeps the rendered frame so captureScene() can read it
         gl={{ preserveDrawingBuffer: true }}
         onCreated={({ gl }) => { _activeCanvas = gl.domElement; }}
       >
@@ -339,39 +383,64 @@ export default function PCBWorkspace({ items, onItemsChange }: PCBWorkspaceProps
         <directionalLight position={[-3, 4, -2]} intensity={0.3} />
         <PCBBoard />
         <Grid
-          infiniteGrid
-          cellSize={0.5}
-          cellThickness={0.3}
-          cellColor="#005588"
-          sectionSize={2.5}
-          sectionThickness={0.6}
-          sectionColor="#0077aa"
-          fadeDistance={25}
-          fadeStrength={1.5}
-          followCamera={false}
+          infiniteGrid cellSize={0.5} cellThickness={0.3} cellColor="#005588"
+          sectionSize={2.5} sectionThickness={0.6} sectionColor="#0077aa"
+          fadeDistance={25} fadeStrength={1.5} followCamera={false}
           position={[0, -0.12, 0]}
         />
-        {/* Each component lives in a rotation group so the rotate button in the
-            minimap rotates the actual 3D model around its own Y axis. */}
+
+        {/* Components, each in a rotation group */}
         {droppedItems.map((item, i) => {
           const rotRad = ((item.rotation_deg ?? 0) * Math.PI) / 180;
           return (
-            <group
-              key={i}
-              position={[item.x, -0.03, item.y]}
-              rotation={[0, rotRad, 0]}
-            >
+            <group key={`comp-${i}`} position={[item.x, -0.03, item.y]} rotation={[0, rotRad, 0]}>
               <PCBComponent label={item.type} />
             </group>
           );
         })}
+
+        {/* Pin spheres — clickable in wire mode */}
+        {droppedItems.map((item, ci) => {
+          return getPins(item.type).map((pin) => {
+            const wp = pinWorldPosition(item, pin.name);
+            if (!wp) return null;
+            const isPending =
+              !!pendingPin &&
+              pendingPin.componentIndex === ci &&
+              pendingPin.pinName === pin.name;
+            return (
+              <PinSphere
+                key={`pin-${ci}-${pin.name}`}
+                position={wp}
+                wireMode={!!wireMode}
+                isPending={isPending}
+                onClick={() => onPinClick?.({ componentIndex: ci, pinName: pin.name })}
+              />
+            );
+          });
+        })}
+
+        {/* Wires — thin yellow cylinders between connected pins */}
+        {(wires ?? []).map((w) => {
+          const fromItem = droppedItems[w.fromComponent];
+          const toItem = droppedItems[w.toComponent];
+          if (!fromItem || !toItem) return null;
+          const a = pinWorldPosition(fromItem, w.fromPin);
+          const b = pinWorldPosition(toItem, w.toPin);
+          if (!a || !b) return null;
+          // Slightly raise wires so they're visible above pin spheres
+          return (
+            <Wire3D
+              key={w.id}
+              start={[a[0], a[1] + 0.04, a[2]]}
+              end={[b[0], b[1] + 0.04, b[2]]}
+            />
+          );
+        })}
+
         <OrbitControls
-          enablePan
-          enableZoom
-          enableRotate
-          maxPolarAngle={Math.PI / 2.1}
-          minDistance={2}
-          maxDistance={15}
+          enablePan enableZoom enableRotate
+          maxPolarAngle={Math.PI / 2.1} minDistance={2} maxDistance={15}
         />
       </Canvas>
     </div>

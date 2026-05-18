@@ -19,7 +19,6 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { clearSession, getCurrentUserEmail, getRecentsKey, getSavedProjectsKey } from "@/lib/auth";
 
-// rotation_deg is optional so old saved projects still load fine.
 type BoardItem = { type: string; x: number; y: number; rotation_deg?: number };
 type RecentFile = { name: string; openedAt: number };
 type SavedProject = { id: string; name: string; lastOpened: number; snapshot?: { schemaVersion?: number; savedAt: string; note: string; projectId: string; projectName: string; recentFiles: RecentFile[]; boardItems?: BoardItem[]; }; };
@@ -27,11 +26,7 @@ type SavedProject = { id: string; name: string; lastOpened: number; snapshot?: {
 const MAX_RECENTS = 6;
 const MAX_SAVED_PROJECTS = 20;
 
-// Physical PCB dimensions the workspace represents.
 const PCB_PHYSICAL_MM = { width: 62, height: 42 };
-
-// CORRECTED: your 3D scene PCBBoard is 6.2 units wide representing 62mm,
-// 4.2 units deep representing 42mm. So 1 scene unit = 10mm.
 const SCENE_MM_PER_UNIT = 10.0;
 
 function getSavedProjectsKey2(email: string) { return `pcbworkspace.savedProjects.v2:${email.trim().toLowerCase()}`; }
@@ -111,7 +106,7 @@ const Index = () => {
 
   useEffect(() => { wakeBackend(); }, []);
 
-  // ─── Sprint 1: rotation + delete handlers ─────────────────────────────────────
+  // ─── Sprint 1: rotation + delete ──────────────────────────────────────────────
   const handleRotateComponent = (index: number) => {
     setBoardItems((prev) =>
       prev.map((item, i) =>
@@ -133,6 +128,25 @@ const Index = () => {
         })),
     );
     setBoardItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // ─── Sprint 2: nudge selected component by N mm in X or Y ─────────────────────
+  // Bounds: don't let components drift past the PCB edges.
+  const handleNudgeComponent = (index: number, dxMm: number, dyMm: number) => {
+    const halfWidthScene  = (PCB_PHYSICAL_MM.width  / 2) / SCENE_MM_PER_UNIT;
+    const halfHeightScene = (PCB_PHYSICAL_MM.height / 2) / SCENE_MM_PER_UNIT;
+    const dxScene = dxMm / SCENE_MM_PER_UNIT;
+    const dyScene = dyMm / SCENE_MM_PER_UNIT;
+    setBoardItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        return {
+          ...item,
+          x: Math.max(-halfWidthScene,  Math.min(halfWidthScene,  item.x + dxScene)),
+          y: Math.max(-halfHeightScene, Math.min(halfHeightScene, item.y + dyScene)),
+        };
+      }),
+    );
   };
 
   // ─── Detect modal state ───────────────────────────────────────────────────────
@@ -231,14 +245,34 @@ const Index = () => {
     else runDetection();
   };
 
-  const mapItems = useMemo(
-    () => boardItems.map((item) => ({
-      type: item.type,
-      rotation_deg: item.rotation_deg ?? 0,
-      ...itemToMm(item),
-    })),
-    [boardItems],
-  );
+  // ─── Sprint 2: minimap items now include pin mm positions ─────────────────────
+  // Pins are stored in scene-unit LOCAL coords relative to the component.
+  // To get a pin's mm position on the PCB: rotate the local pin by the component's
+  // rotation_deg, then scale by SCENE_MM_PER_UNIT and offset to the component's mm position.
+  const mapItems = useMemo(() => {
+    return boardItems.map((item) => {
+      const { x_mm, y_mm } = itemToMm(item);
+      const rotRad = ((item.rotation_deg ?? 0) * Math.PI) / 180;
+      const cos = Math.cos(rotRad);
+      const sin = Math.sin(rotRad);
+      const pins = getPins(item.type).map((p) => {
+        const lx = p.position[0];
+        const lz = p.position[2];
+        const rx = lx * cos - lz * sin;
+        const rz = lx * sin + lz * cos;
+        return {
+          name: p.name,
+          x_mm: x_mm + rx * SCENE_MM_PER_UNIT,
+          y_mm: y_mm + rz * SCENE_MM_PER_UNIT,
+        };
+      });
+      return {
+        type: item.type,
+        rotation_deg: item.rotation_deg ?? 0,
+        x_mm, y_mm, pins,
+      };
+    });
+  }, [boardItems]);
 
   const handleExportRobotJob = () => {
     if (boardItems.length === 0) {
@@ -364,7 +398,14 @@ const Index = () => {
               <span className="text-primary font-black text-[11px] tracking-widest uppercase">PCB Workspace</span>
             </div>
             <div className="flex-1 relative">
-              <PCBWorkspace items={boardItems} onItemsChange={setBoardItems} wires={wires} wireMode={wireMode} pendingPin={pendingPin} onPinClick={handlePinClick} />
+              <PCBWorkspace
+                items={boardItems}
+                onItemsChange={setBoardItems}
+                wires={wires}
+                wireMode={wireMode}
+                pendingPin={pendingPin}
+                onPinClick={handlePinClick}
+              />
 
               <div className="absolute top-3 right-3 z-30 flex gap-0.5 bg-black/80 border border-primary/30 rounded-lg p-1 shadow-2xl backdrop-blur-sm">
                 <button type="button" onClick={handleSaveProject} className={floatIconBtn} title="Save Project">
@@ -386,6 +427,7 @@ const Index = () => {
                 onExport={handleExportRobotJob}
                 onRotate={handleRotateComponent}
                 onDelete={handleDeleteComponent}
+                onNudge={handleNudgeComponent}
               />
             </div>
           </div>

@@ -8,6 +8,7 @@ import JEPADemo from "@/components/JEPADemo";
 import NNPanel from "@/components/NNPanel";
 import DetectModal from "@/components/DetectModal";
 import Minimap2D from "@/components/Minimap2D";
+import RobotConnect from "@/components/RobotConnect";
 import { getMultiLabelDetection, getDetectBoxesByMethod, wakeBackend, type ClassPrediction, type DetectionBox, type DetectionMethod } from "@/lib/nn";
 import { grabCameraFrame } from "@/components/CameraFeed";
 import { captureScene } from "@/components/PCBWorkspace";
@@ -106,7 +107,7 @@ const Index = () => {
 
   useEffect(() => { wakeBackend(); }, []);
 
-  // ─── Sprint 1: rotation + delete ──────────────────────────────────────────────
+  // ─── Sprint 1: rotation + delete ────────────────────────────────────────────
   const handleRotateComponent = (index: number) => {
     setBoardItems((prev) =>
       prev.map((item, i) =>
@@ -130,11 +131,10 @@ const Index = () => {
     setBoardItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // ─── Sprint 2: nudge selected component by N mm in X or Y ─────────────────────
-  // Bounds: don't let components drift past the PCB edges.
+  // ─── Sprint 2: nudge selected component (1mm at a time) ─────────────────────
   const handleNudgeComponent = (index: number, dxMm: number, dyMm: number) => {
-    const halfWidthScene  = (PCB_PHYSICAL_MM.width  / 2) / SCENE_MM_PER_UNIT;
-    const halfHeightScene = (PCB_PHYSICAL_MM.height / 2) / SCENE_MM_PER_UNIT;
+    const halfW = (PCB_PHYSICAL_MM.width  / 2) / SCENE_MM_PER_UNIT;
+    const halfH = (PCB_PHYSICAL_MM.height / 2) / SCENE_MM_PER_UNIT;
     const dxScene = dxMm / SCENE_MM_PER_UNIT;
     const dyScene = dyMm / SCENE_MM_PER_UNIT;
     setBoardItems((prev) =>
@@ -142,14 +142,14 @@ const Index = () => {
         if (i !== index) return item;
         return {
           ...item,
-          x: Math.max(-halfWidthScene,  Math.min(halfWidthScene,  item.x + dxScene)),
-          y: Math.max(-halfHeightScene, Math.min(halfHeightScene, item.y + dyScene)),
+          x: Math.max(-halfW, Math.min(halfW, item.x + dxScene)),
+          y: Math.max(-halfH, Math.min(halfH, item.y + dyScene)),
         };
       }),
     );
   };
 
-  // ─── Detect modal state ───────────────────────────────────────────────────────
+  // ─── Detect modal state ──────────────────────────────────────────────────────
   const [detectOpen, setDetectOpen] = useState(false);
   const [detectLoading, setDetectLoading] = useState(false);
   const [detectResult, setDetectResult] = useState<{
@@ -245,10 +245,7 @@ const Index = () => {
     else runDetection();
   };
 
-  // ─── Sprint 2: minimap items now include pin mm positions ─────────────────────
-  // Pins are stored in scene-unit LOCAL coords relative to the component.
-  // To get a pin's mm position on the PCB: rotate the local pin by the component's
-  // rotation_deg, then scale by SCENE_MM_PER_UNIT and offset to the component's mm position.
+  // mapItems for the minimap — includes mm-converted pin positions
   const mapItems = useMemo(() => {
     return boardItems.map((item) => {
       const { x_mm, y_mm } = itemToMm(item);
@@ -361,11 +358,14 @@ const Index = () => {
     <div className="h-screen w-screen flex overflow-hidden relative bg-black">
       {showDemo && <JEPADemo onClose={() => setShowDemo(false)} />}
 
+      {/* Top bar — account stuff + robot connect badge */}
       <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-end gap-2 px-4 py-2 bg-black/60 border-b border-white/5">
         <span className="text-xs font-semibold text-white mr-2">{email}</span>
         <button type="button" onClick={() => navigate("/login", { replace: true })} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Switch Account</button>
         <button type="button" onClick={() => { clearSession(); navigate("/login", { replace: true }); }} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Logout</button>
         <a href="https://spaceroboticscreations.com/" target="_blank" rel="noopener noreferrer" className="text-[#00d4ff] text-xs font-bold opacity-70 hover:opacity-100 transition-opacity">SERC ↗</a>
+        {/* Sprint 3 — robot connection badge */}
+        <RobotConnect />
       </div>
 
       <div className="w-[230px] shrink-0 flex flex-col gap-3 p-3 pt-12" style={{background:"linear-gradient(to bottom, hsl(195,100%,50%), hsl(210,100%,40%))"}}>

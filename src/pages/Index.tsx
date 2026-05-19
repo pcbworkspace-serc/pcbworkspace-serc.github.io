@@ -439,7 +439,7 @@ const Index = () => {
       </div>
 
       <div className="w-[280px] shrink-0 flex flex-col pt-10 border-l border-primary/20" style={{backgroundColor:"hsla(220,70%,8%,0.97)"}}>
-        <PCBRobot />
+        <PCBRobot boardItems={mapItems} />
       </div>
 
       {detectOpen && (

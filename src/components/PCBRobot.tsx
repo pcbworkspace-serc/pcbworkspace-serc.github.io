@@ -140,17 +140,30 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
       abortSignal: abortRef.current.signal,
       waitForOk: true,
       stepTimeoutMs: 8000,
+      // Sprint 8: camera feedback loop on critical actions
+      observeAfter: ["pick", "place", "release"],
+      grabFrame: async () => {
+        try { return await grabCameraFrame(); } catch { return null; }
+      },
+      maxRetries: 1,
       onEvent: (e) => {
         if (e.kind === "step") {
-          appendAssistant(`▶ Step ${e.index + 1}/${e.total}: \`${e.line}\``);
+          const retrySuffix = e.attempt > 1 ? ` (retry ${e.attempt - 1})` : "";
+          appendAssistant(`▶ Step ${e.index + 1}/${e.total}${retrySuffix}: \`${e.line}\``);
         } else if (e.kind === "response") {
-          if (e.ok) {
-            appendAssistant(`  ✅ ${e.line.trim() || "OK"}`);
-          } else {
-            appendAssistant(`  ⚠️ ${e.line.trim()}`);
-          }
+          appendAssistant(`  ${e.ok ? "✅" : "⚠️"} ${e.line.trim() || (e.ok ? "OK" : "ERR")}`);
         } else if (e.kind === "timeout") {
           appendAssistant(`  ⌛ Step ${e.index + 1}: no ack from robot (continuing)`);
+        } else if (e.kind === "observe_start") {
+          appendAssistant(`  👁️ Checking camera…`);
+        } else if (e.kind === "observe_result") {
+          const icon = e.verified ? "✓" : "✗";
+          const conf = (e.confidence * 100).toFixed(0);
+          appendAssistant(`  👁️ ${icon} ${e.observation} _(${e.recommendation}, ${conf}% conf)_`);
+        } else if (e.kind === "observe_skip") {
+          appendAssistant(`  👁️ Visual check skipped: ${e.reason}`);
+        } else if (e.kind === "retry") {
+          appendAssistant(`  🔄 Observer recommended retry — re-running step ${e.index + 1}…`);
         } else if (e.kind === "done") {
           appendAssistant("✅ Plan complete.");
         } else if (e.kind === "error") {

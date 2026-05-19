@@ -1,9 +1,25 @@
-// WebSerial wrapper for ESP32 SCARA communication.
+// WebSerial wrapper for ESP32 communication.
 //
 // Browser support: Chromium-based browsers (Chrome, Edge, Brave) on desktop.
 // Requires HTTPS (the deployed site is HTTPS) or localhost.
-
-import { tapOutgoing, tapIncoming } from "@/lib/lerobot";
+// Not supported on Firefox/Safari/mobile.
+//
+// Protocol expected by your ESP32 firmware (you implement this on the embedded side):
+//   - Baud rate: 115200, 8N1
+//   - Commands are newline-terminated ASCII
+//   - Common verbs:
+//       MOVE X<mm> Y<mm> Z<mm> R<deg>   move end-effector to absolute position
+//       PICK / PLACE / RELEASE          gripper open/close
+//       HOME                            return to home position
+//       STOP                            emergency stop
+//       ROTATE <deg>                    rotate end-effector
+//       SCAN / DETECT / ALIGN / VALIDATE  task verbs
+//   - Responses expected on serial (any line is fine):
+//       OK / ERR <msg> / READY / DONE / POS_OK / PICK_OK / PLACE_OK / etc.
+//
+// Every successful send fires a `pcb:robot-command` CustomEvent on window,
+// which teach.ts hooks into for recording LeRobot demonstration episodes.
+// NO imports from "@/lib/lerobot" or similar — the integration is event-based.
 
 const BAUD_RATE = 115200;
 
@@ -78,12 +94,11 @@ async function readLoop() {
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
-        // Tap for the LeRobot recorder — silent unless an episode is active
-        try { tapIncoming(trimmed); } catch {}
         lineSubscribers.forEach((fn) => { try { fn(trimmed); } catch {} });
       }
     }
   } catch {
+    // stream closed
   } finally {
     await safeClose();
     setStatus("disconnected");
@@ -105,11 +120,15 @@ export async function disconnectRobot(): Promise<void> {
   setStatus("disconnected");
 }
 
+/** Send a single line to the robot, newline appended. Fires "pcb:robot-command" on window. */
 export async function sendSerialCommand(cmd: string): Promise<void> {
   if (!writer) throw new Error("Robot not connected. Click the badge to connect first.");
   await writer.write(cmd + "\n");
-  // Tap for the LeRobot recorder — silent unless an episode is active
-  try { tapOutgoing(cmd); } catch {}
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("pcb:robot-command", {
+      detail: { command: cmd, timestamp: Date.now() },
+    }));
+  }
 }
 
 export function robotCmdToSerialLine(cmd: any): string {

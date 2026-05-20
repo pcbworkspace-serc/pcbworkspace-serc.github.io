@@ -1,7 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { sendSerialCommand, getSerialStatus } from "@/lib/serial";
 import { planAction, executePlan, type VLAAction, type BoardStateItem } from "@/lib/vla";
+import { captureFrameByRole } from "@/lib/cameras";
+import { savePlan, markPlanUsed, type SavedPlan } from "@/lib/plans";
 import { grabCameraFrame } from "@/components/CameraFeed";
+import PlanLibrary from "@/components/PlanLibrary";
 
 type Message = { role: "user" | "assistant"; content: string };
 type KBEntry = { keywords: string[]; answer: string };
@@ -78,6 +81,8 @@ interface PCBRobotProps {
 export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
   const [visible, setVisible] = useState(true);
   const [vlaMode, setVlaMode] = useState(false);
+  const [planLibraryOpen, setPlanLibraryOpen] = useState(false);
+  const lastPlanRef = useRef<{ instruction: string; actions: VLAAction[] } | null>(null);
   const [messages, setMessages] = useState<Message[]>([{
     role: "assistant",
     content: "Hi! I am Layla, your PCB design assistant. I can help with electronics theory, PCB design rules, component placement, communication protocols, and the JEPA vision system.\n\nI can also drive the SCARA robot — just connect it via the badge in the top bar, then try things like `home`, `move 20 15`, or `pick`.\n\nFor natural-language control, toggle **VLA** above — then you can say *\"place a resistor 15mm from the lower left\"* and Layla will plan and execute it."
@@ -129,6 +134,9 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
 
     if (plan.actions.length === 0) return;
 
+    // Remember this plan so the user can save it later
+    lastPlanRef.current = { instruction, actions: plan.actions };
+
     if (getSerialStatus() !== "connected") {
       appendAssistant("Robot isn't connected, so I can show the plan but can't execute it. Click the Connect Robot badge in the top bar and try again.");
       return;
@@ -140,9 +148,15 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
       abortSignal: abortRef.current.signal,
       waitForOk: true,
       stepTimeoutMs: 8000,
-      // Sprint 8: camera feedback loop on critical actions
+      // Sprint 8/9: camera feedback loop on critical actions, with per-action camera routing
       observeAfter: ["pick", "place", "release"],
-      grabFrame: async () => {
+      getFrameForAction: async (a) => {
+        // After PICK → bottom camera sees the part held on the nozzle
+        // After PLACE / RELEASE → top camera sees the part on the PCB
+        const role = a.action === "pick" ? "bottom" : "top";
+        const frame = await captureFrameByRole(role);
+        if (frame) return frame;
+        // Fallback to whatever the live CameraFeed has if dual-camera setup isn't ready
         try { return await grabCameraFrame(); } catch { return null; }
       },
       maxRetries: 1,
@@ -174,6 +188,68 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
       },
     });
     setExecuting(false);
+    abortRef.current = null;
+  };
+
+  /** Save the most recently generated VLA plan as a named template. */
+  const handleSaveLastPlan = () => {
+    if (!lastPlanRef.current) return;
+    const defaultName = lastPlanRef.current.instruction.slice(0, 40);
+    const name = window.prompt("Name this plan:", defaultName);
+    if (name === null) return;
+    const saved = savePlan(name, lastPlanRef.current.instruction, lastPlanRef.current.actions);
+    appendAssistant(`📚 Saved as "${saved.name}". Open the **Plans** popover above to replay it later.`);
+  };
+
+  /** Execute a saved plan immediately — no LLM round-trip. */
+  const replayPlan = async (plan: SavedPlan) => {
+    setPlanLibraryOpen(false);
+    markPlanUsed(plan.id);
+    setMessages(prev => [...prev, { role: "user", content: `[Replay] ${plan.name}` }]);
+    appendAssistant(`📚 Replaying **${plan.name}** — ${plan.actions.length} step${plan.actions.length === 1 ? "" : "s"}.`);
+
+    if (getSerialStatus() !== "connected") {
+      appendAssistant("Robot isn't connected. Click the Connect Robot badge in the top bar.");
+      return;
+    }
+
+    setBusy(true);
+    setExecuting(true);
+    abortRef.current = new AbortController();
+    await executePlan(plan.actions, {
+      abortSignal: abortRef.current.signal,
+      waitForOk: true,
+      stepTimeoutMs: 8000,
+      observeAfter: ["pick", "place", "release"],
+      getFrameForAction: async (a) => {
+        const role = a.action === "pick" ? "bottom" : "top";
+        const frame = await captureFrameByRole(role);
+        if (frame) return frame;
+        try { return await grabCameraFrame(); } catch { return null; }
+      },
+      maxRetries: 1,
+      onEvent: (e) => {
+        if (e.kind === "step") {
+          const retrySuffix = e.attempt > 1 ? ` (retry ${e.attempt - 1})` : "";
+          appendAssistant(`▶ Step ${e.index + 1}/${e.total}${retrySuffix}: \`${e.line}\``);
+        } else if (e.kind === "response") {
+          appendAssistant(`  ${e.ok ? "✅" : "⚠️"} ${e.line.trim() || (e.ok ? "OK" : "ERR")}`);
+        } else if (e.kind === "timeout") {
+          appendAssistant(`  ⌛ Step ${e.index + 1}: no ack from robot (continuing)`);
+        } else if (e.kind === "observe_result") {
+          const icon = e.verified ? "✓" : "✗";
+          appendAssistant(`  👁️ ${icon} ${e.observation}`);
+        } else if (e.kind === "done") {
+          appendAssistant("✅ Replay complete.");
+        } else if (e.kind === "error") {
+          appendAssistant(`❌ Step ${e.index + 1} failed: ${e.message}`);
+        } else if (e.kind === "aborted") {
+          appendAssistant(`⛔ Aborted after step ${e.index}.`);
+        }
+      },
+    });
+    setExecuting(false);
+    setBusy(false);
     abortRef.current = null;
   };
 
@@ -237,9 +313,17 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 shrink-0 gap-2">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 shrink-0 gap-2 relative">
         <div className="font-bold text-white">PCB <span style={{ color: "#00d4ff" }}>Robot</span></div>
         <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setPlanLibraryOpen(v => !v)}
+            className="text-[10px] font-bold px-2 py-1 rounded border bg-white/5 text-white/70 border-white/20 hover:bg-white/10 transition-colors"
+            title="Open the saved-plans library"
+          >
+            📚 Plans
+          </button>
           <button
             type="button"
             onClick={() => setVlaMode(v => !v)}
@@ -248,7 +332,7 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
                 ? "bg-purple-500/25 text-purple-200 border-purple-400/60"
                 : "bg-white/5 text-white/60 border-white/20 hover:bg-white/10"
             }`}
-            title="Toggle Vision-Language-Action mode: route freeform instructions through Claude → SCARA"
+            title="Toggle Vision-Language-Action mode: route freeform instructions through Claude → robot"
           >
             {vlaMode ? "● VLA: ON" : "VLA: OFF"}
           </button>
@@ -260,6 +344,12 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
             {visible ? "Hide Robot" : "Show Robot"}
           </button>
         </div>
+        {planLibraryOpen && (
+          <PlanLibrary
+            onClose={() => setPlanLibraryOpen(false)}
+            onSelect={replayPlan}
+          />
+        )}
       </div>
       {visible && <>
         <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
@@ -291,6 +381,20 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
               className="text-[10px] font-bold text-red-300 hover:text-red-200 border border-red-400/40 hover:border-red-400/70 rounded px-2 py-0.5"
             >
               ABORT
+            </button>
+          </div>
+        )}
+        {!executing && lastPlanRef.current && (
+          <div className="px-3 py-1.5 bg-purple-900/15 border-t border-purple-400/15 flex items-center justify-between shrink-0">
+            <span className="text-[10px] text-purple-300/70">
+              Last plan: {lastPlanRef.current.actions.length} step{lastPlanRef.current.actions.length === 1 ? "" : "s"}
+            </span>
+            <button
+              type="button"
+              onClick={handleSaveLastPlan}
+              className="text-[10px] font-bold text-purple-300 hover:text-purple-200 border border-purple-400/40 hover:border-purple-400/70 rounded px-2 py-0.5"
+            >
+              📚 Save plan
             </button>
           </div>
         )}

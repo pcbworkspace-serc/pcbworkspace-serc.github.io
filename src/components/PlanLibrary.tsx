@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import { listSavedPlans, deletePlan, type SavedPlan } from "@/lib/plans";
 
 interface PlanLibraryProps {
@@ -20,7 +20,7 @@ export default function PlanLibrary({ onClose, onSelect }: PlanLibraryProps) {
     setPlans(listSavedPlans());
   }, []);
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = (id: string, e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     if (!window.confirm("Delete this saved plan?")) return;
     deletePlan(id);

@@ -82,7 +82,7 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
   const [visible, setVisible] = useState(true);
   const [vlaMode, setVlaMode] = useState(false);
   const [planLibraryOpen, setPlanLibraryOpen] = useState(false);
-  const lastPlanRef = useRef<{ instruction: string; actions: VLAAction[] } | null>(null);
+  const [lastPlan, setLastPlan] = useState<{ instruction: string; actions: VLAAction[] } | null>(null);
   const [messages, setMessages] = useState<Message[]>([{
     role: "assistant",
     content: "Hi! I am Layla, your PCB design assistant. I can help with electronics theory, PCB design rules, component placement, communication protocols, and the JEPA vision system.\n\nI can also drive the SCARA robot — just connect it via the badge in the top bar, then try things like `home`, `move 20 15`, or `pick`.\n\nFor natural-language control, toggle **VLA** above — then you can say *\"place a resistor 15mm from the lower left\"* and Layla will plan and execute it."
@@ -135,7 +135,7 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
     if (plan.actions.length === 0) return;
 
     // Remember this plan so the user can save it later
-    lastPlanRef.current = { instruction, actions: plan.actions };
+    setLastPlan({ instruction, actions: plan.actions });
 
     if (getSerialStatus() !== "connected") {
       appendAssistant("Robot isn't connected, so I can show the plan but can't execute it. Click the Connect Robot badge in the top bar and try again.");
@@ -193,11 +193,11 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
 
   /** Save the most recently generated VLA plan as a named template. */
   const handleSaveLastPlan = () => {
-    if (!lastPlanRef.current) return;
-    const defaultName = lastPlanRef.current.instruction.slice(0, 40);
+    if (!lastPlan) return;
+    const defaultName = lastPlan.instruction.slice(0, 40);
     const name = window.prompt("Name this plan:", defaultName);
     if (name === null) return;
-    const saved = savePlan(name, lastPlanRef.current.instruction, lastPlanRef.current.actions);
+    const saved = savePlan(name, lastPlan.instruction, lastPlan.actions);
     appendAssistant(`📚 Saved as "${saved.name}". Open the **Plans** popover above to replay it later.`);
   };
 
@@ -384,10 +384,10 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
             </button>
           </div>
         )}
-        {!executing && lastPlanRef.current && (
+        {!executing && lastPlan && (
           <div className="px-3 py-1.5 bg-purple-900/15 border-t border-purple-400/15 flex items-center justify-between shrink-0">
             <span className="text-[10px] text-purple-300/70">
-              Last plan: {lastPlanRef.current.actions.length} step{lastPlanRef.current.actions.length === 1 ? "" : "s"}
+              Last plan: {lastPlan.actions.length} step{lastPlan.actions.length === 1 ? "" : "s"}
             </span>
             <button
               type="button"

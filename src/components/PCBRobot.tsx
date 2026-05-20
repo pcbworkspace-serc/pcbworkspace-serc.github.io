@@ -85,7 +85,7 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
   const [lastPlan, setLastPlan] = useState<{ instruction: string; actions: VLAAction[] } | null>(null);
   const [messages, setMessages] = useState<Message[]>([{
     role: "assistant",
-    content: "Hi! I am Layla, your PCB design assistant. I can help with electronics theory, PCB design rules, component placement, communication protocols, and the JEPA vision system.\n\nI can also drive the SCARA robot — just connect it via the badge in the top bar, then try things like `home`, `move 20 15`, or `pick`.\n\nFor natural-language control, toggle **VLA** above — then you can say *\"place a resistor 15mm from the lower left\"* and Layla will plan and execute it."
+    content: "Hi! I am Layla, your PCB design assistant.\n\n**Try typing:**\n• `home` — robot returns to start\n• `move 30 20` — go to X=30mm Y=20mm\n• `pick` then `move 50 40` then `place` — full pick-and-place\n\n**For natural language**, toggle **VLA: ON** above, then try *\"go home and move to the center\"*. After it runs, click **Save plan** to add it to your library.\n\n**For electronics theory**, ask anything — *\"how does a capacitor work?\"*, *\"what's the difference between I2C and SPI?\"*"
   }]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -259,11 +259,26 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
     setInput(""); setBusy(true);
     setMessages(prev => [...prev, { role: "user", content: text }]);
 
+    // 0) Meta-commands that operate on the UI, not the robot
+    if (/^(save|save (this )?plan|save the (last )?plan|save it)$/i.test(text)) {
+      if (lastPlan) {
+        handleSaveLastPlan();
+      } else {
+        appendAssistant("There's no plan to save yet.\n\nFirst, toggle **VLA: ON**, give an instruction like *\"go home and move to the center\"*, and let it execute. Then you'll see a **📚 Save plan** button below the chat — clicking it (or typing `save plan`) stores the plan for later replay.");
+      }
+      setBusy(false); return;
+    }
+    if (/^(plans|library|show plans|my plans|list plans)$/i.test(text)) {
+      setPlanLibraryOpen(true);
+      appendAssistant("📚 Plan library opened above. Click any saved plan to replay it.");
+      setBusy(false); return;
+    }
+
     // 1) Always try regex robot commands first — fast path, no LLM
     const robotLine = parseRobotCommand(text);
     if (robotLine) {
       if (getSerialStatus() !== "connected") {
-        appendAssistant(`That looks like a robot command, but the robot isn't connected yet.\n\nClick the **Connect Robot** badge in the top bar (top-right), pick your ESP32, then try again.`);
+        appendAssistant(`That looks like a robot command, but the robot isn't connected yet.\n\nClick the **Connect Robot** badge in the top bar (top-right), pick your ESP32 — or pick **🎮 Demo Mode** to try the app without hardware — then try again.`);
         setBusy(false); return;
       }
       try {
@@ -309,7 +324,7 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
     // 5) Generic miss
     appendAssistant(`That one is outside my current knowledge base. Try toggling **VLA Mode** above if you want me to interpret freeform instructions — or ask me about resistors, capacitors, transistors, PCB design, protocols, or how to drive the robot (\`home\`, \`move 10 20\`, \`pick\`).`);
     setBusy(false);
-  }, [input, busy, vlaMode, boardItems]);
+  }, [input, busy, vlaMode, boardItems, lastPlan]);
 
   return (
     <div className="flex flex-col h-full">
@@ -398,6 +413,30 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
             </button>
           </div>
         )}
+        <div className="px-3 pt-2 pb-1 border-t border-white/10 flex flex-wrap gap-1 shrink-0 bg-black/20">
+          <span className="text-[9px] text-white/40 mr-1 self-center uppercase tracking-wide">Try:</span>
+          {vlaMode
+            ? ["go home", "move to the center", "pick and place a resistor", "place a part in the upper right"].map(ex => (
+                <button
+                  key={ex}
+                  type="button"
+                  onClick={() => setInput(ex)}
+                  className="text-[9px] text-purple-200/70 hover:text-purple-100 border border-purple-400/25 hover:border-purple-400/60 rounded px-1.5 py-0.5 transition-colors"
+                >
+                  {ex}
+                </button>
+              ))
+            : ["home", "move 30 20", "pick", "place", "rotate 90", "save plan"].map(ex => (
+                <button
+                  key={ex}
+                  type="button"
+                  onClick={() => setInput(ex)}
+                  className="text-[9px] font-mono text-white/60 hover:text-white border border-white/15 hover:border-white/40 rounded px-1.5 py-0.5 transition-colors"
+                >
+                  {ex}
+                </button>
+              ))}
+        </div>
         <div className="p-3 border-t border-white/10 flex gap-2 shrink-0">
           <input
             value={input}

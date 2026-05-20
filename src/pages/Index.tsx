@@ -10,7 +10,9 @@ import DetectModal from "@/components/DetectModal";
 import Minimap2D from "@/components/Minimap2D";
 import RobotConnect from "@/components/RobotConnect";
 import TeachMode from "@/components/TeachMode";
+import RobotStatus from "@/components/RobotStatus";
 import { installSerialRecorder } from "@/lib/teach";
+import { installRobotStateListener } from "@/lib/robot_state";
 import { getMultiLabelDetection, getDetectBoxesByMethod, wakeBackend, type ClassPrediction, type DetectionBox, type DetectionMethod } from "@/lib/nn";
 import { grabCameraFrame } from "@/components/CameraFeed";
 import { captureScene } from "@/components/PCBWorkspace";
@@ -80,6 +82,7 @@ const Index = () => {
   // Sprint 5: install LeRobot serial recorder once
   useEffect(() => {
     installSerialRecorder();
+    installRobotStateListener();
     wakeBackend();
   }, []);
 
@@ -452,6 +455,8 @@ const Index = () => {
           onChangeMethod={rerunWithMethod}
         />
       )}
+
+      <RobotStatus />
     </div>
   );
 };

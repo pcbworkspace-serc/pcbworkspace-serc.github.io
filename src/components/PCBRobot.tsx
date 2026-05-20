@@ -104,8 +104,8 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
     sendSerialCommand("STOP").catch(() => {});
   };
 
-  const runVLA = async (instruction: string) => {
-    appendAssistant("🧠 Planning… (asking Claude what to do)");
+  const runVLA = async (instruction: string): Promise<boolean> => {
+    appendAssistant("🧠 Planning…");
 
     // Try to grab a camera frame for visual grounding
     let frame: Blob | null = null;
@@ -115,7 +115,12 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
 
     if (!plan.ok) {
       appendAssistant(`VLA error: ${plan.error}${plan.raw_response ? `\n\nRaw response:\n${plan.raw_response.slice(0, 400)}` : ""}`);
-      return;
+      return true;   // we tried, surfaced an error — don't double-respond from KB
+    }
+
+    // No motion intent — let the caller fall through to KB
+    if (plan.actions.length === 0) {
+      return false;
     }
 
     let summary = `**Plan:** ${plan.interpretation}\n\n**${plan.actions.length} action${plan.actions.length === 1 ? "" : "s"}:**`;
@@ -132,14 +137,12 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
     }
     appendAssistant(summary);
 
-    if (plan.actions.length === 0) return;
-
     // Remember this plan so the user can save it later
     setLastPlan({ instruction, actions: plan.actions });
 
     if (getSerialStatus() !== "connected") {
-      appendAssistant("Robot isn't connected, so I can show the plan but can't execute it. Click the Connect Robot badge in the top bar and try again.");
-      return;
+      appendAssistant("Robot isn't connected, so I can show the plan but can't execute it.\n\nClick the **Connect Robot** badge in the top bar — pick **🎮 Demo Mode** to simulate it, or **Real Robot** to drive your ESP32.");
+      return true;
     }
 
     setExecuting(true);
@@ -189,6 +192,7 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
     });
     setExecuting(false);
     abortRef.current = null;
+    return true;
   };
 
   /** Save the most recently generated VLA plan as a named template. */
@@ -290,21 +294,26 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
       setBusy(false); return;
     }
 
-    // 2) KB lookup
+    // 2) VLA mode: route freeform instructions to the planner first.
+    //    If the planner returns NO actions (it was a question / non-motion),
+    //    fall through to the KB so electronics questions still work in VLA mode.
+    if (vlaMode) {
+      let handled = false;
+      try {
+        handled = await runVLA(text);
+      } catch (e) {
+        appendAssistant(`VLA failed: ${e instanceof Error ? e.message : String(e)}`);
+        handled = true;
+      }
+      if (handled) { setBusy(false); return; }
+      // else fall through to KB
+    }
+
+    // 3) KB lookup
     const kb = findAnswer(text);
     if (kb) {
       await new Promise(r => setTimeout(r, 350));
       appendAssistant(kb);
-      setBusy(false); return;
-    }
-
-    // 3) VLA mode: route to local Flask planner
-    if (vlaMode) {
-      try {
-        await runVLA(text);
-      } catch (e) {
-        appendAssistant(`VLA failed: ${e instanceof Error ? e.message : String(e)}`);
-      }
       setBusy(false); return;
     }
 

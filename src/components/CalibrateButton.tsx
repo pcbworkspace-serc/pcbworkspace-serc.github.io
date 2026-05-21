@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import CalibrationModal from "@/components/CalibrationModal";
 import { useRobotStatus } from "@/hooks/useRobotStatus";
 export default function CalibrateButton() {
@@ -11,7 +11,7 @@ export default function CalibrateButton() {
         type="button"
         onClick={() => setShowCalib(true)}
         title={calibrated ? "Camera and workspace calibrated - click to re-run" : "Calibrate camera and workspace"}
-        className={`absolute top-1 right-1 z-10 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider transition-colors shadow ${
+        className={`absolute top-1 left-1 z-10 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider transition-colors shadow ${
           calibrated
             ? "bg-black/70 text-emerald-300 hover:bg-black/90"
             : "bg-yellow-400 text-black hover:bg-yellow-300"

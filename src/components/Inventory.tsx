@@ -1,4 +1,4 @@
-﻿import type { ReactNode } from "react";
+import type { ReactNode } from "react";
 
 function ResistorIcon() {
   return (
@@ -83,7 +83,7 @@ export default function Inventory() {
             key={item.type}
             draggable
             onDragStart={(e) => e.dataTransfer.setData("text/plain", item.type)}
-            className="w-[90px] h-[54px] bg-secondary rounded cursor-grab active:cursor-grabbing
+            className="w-[60px] h-[60px] bg-secondary rounded cursor-grab active:cursor-grabbing
                        flex flex-col items-center justify-center gap-1 text-[10px] font-semibold
                        text-secondary-foreground hover:bg-accent transition-colors select-none"
           >

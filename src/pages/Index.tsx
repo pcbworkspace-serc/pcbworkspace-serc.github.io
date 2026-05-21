@@ -75,6 +75,7 @@ const Index = () => {
 
   // Sprint 4: lifted minimap UI state (so the 3D scene can cross-probe)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [mlToolsOpen, setMlToolsOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"pcb" | "sch">("pcb");
   const [unit, setUnit] = useState<"mm" | "in" | "mil">("mm");
   const [collapsed, setCollapsed] = useState(false);
@@ -432,8 +433,23 @@ const Index = () => {
           <button type="button" onClick={() => { setWireMode(!wireMode); setPendingPin(null); }} className={`h-10 px-4 rounded-md border transition-colors text-[11px] font-semibold ${wireMode ? "border-amber-400 bg-amber-400/20 text-amber-300" : "border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary"}`}>{wireMode ? "Wire: ON" : "Wire Mode"}</button>
           <button type="button" onClick={runDetection} className="h-10 px-4 rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 transition-colors text-[11px] font-semibold text-primary">Detect</button>
           <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) runDetectionOnFile(f); e.target.value = ""; }} />
-          <SampleDropdown onPickSample={runDetectionOnFile} />
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="h-10 px-4 rounded-md border border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/20 transition-colors text-[11px] font-semibold text-amber-400">Upload PCB</button>
+          <div className="relative">
+            <button type="button" onClick={() => setMlToolsOpen(v => !v)} className="h-10 px-4 rounded-md border border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/20 transition-colors text-[11px] font-semibold text-amber-400">ML Tools</button>
+            {mlToolsOpen && (
+              <div className="absolute bottom-full mb-2 right-0 z-30 w-[260px] rounded-lg border border-amber-500/40 bg-black/95 shadow-2xl backdrop-blur-sm overflow-hidden">
+                <div className="px-3 py-2 border-b border-white/10 text-[9px] font-black uppercase tracking-widest text-amber-300">ML Training Tools</div>
+                <div className="px-3 py-2">
+                  <div className="text-[9px] text-white/50 mb-1">Try Sample Image</div>
+                  <SampleDropdown onPickSample={(f) => { setMlToolsOpen(false); runDetectionOnFile(f); }} />
+                </div>
+                <button type="button" onClick={() => { setMlToolsOpen(false); fileInputRef.current?.click(); }} className="w-full px-3 py-2 border-t border-white/10 hover:bg-amber-500/10 text-left text-[10px] text-amber-300 font-semibold flex items-center justify-between transition-colors">
+                  <span>Upload PCB Image</span>
+                  <span className="text-[8px] text-white/40">JPG/PNG</span>
+                </button>
+                <button type="button" onClick={() => setMlToolsOpen(false)} className="w-full px-3 py-1.5 border-t border-white/10 text-[9px] text-white/40 hover:text-white/70">Close</button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-﻿import PCBWorkspace from "@/components/PCBWorkspace";
+import PCBWorkspace from "@/components/PCBWorkspace";
 import Inventory from "@/components/Inventory";
 import CameraFeed from "@/components/CameraFeed";
 import RobotPanel from "@/components/RobotPanel";
@@ -358,7 +358,7 @@ const Index = () => {
         <span className="text-xs font-semibold text-white mr-2">{email}</span>
         <button type="button" onClick={() => navigate("/login", { replace: true })} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Switch Account</button>
         <button type="button" onClick={() => { clearSession(); navigate("/login", { replace: true }); }} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Logout</button>
-        <a href="https://spaceroboticscreations.com/" target="_blank" rel="noopener noreferrer" className="text-[#00d4ff] text-xs font-bold opacity-70 hover:opacity-100 transition-opacity">SERC â†—</a>
+        <a href="https://spaceroboticscreations.com/" target="_blank" rel="noopener noreferrer" className="text-[#00d4ff] text-xs font-bold opacity-70 hover:opacity-100 transition-opacity">SERC</a>
         <TeachMode />
         <RobotConnect />
       </div>

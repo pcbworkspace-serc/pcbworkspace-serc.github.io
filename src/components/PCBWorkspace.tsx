@@ -277,11 +277,6 @@ function PCBComponent({ label }: { label: string }) {
     case "Diode":      return <Diode />;
     case "LED":        return <LED />;
     case "Transistor": return <Transistor />;
-    case "IC":         return <IC />;
-    case "Inductor":   return <Inductor />;
-    case "Crystal":    return <Crystal />;
-    case "Switch":     return <Switch />;
-    case "Header":     return <Header />;
     default:           return <GenericComponent label={label} />;
   }
 }
@@ -346,7 +341,7 @@ function PinSphere({
   );
 }
 
-/** Glowing amber ring around the selected component ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â for cross-probing from the 2D map. */
+/** Glowing amber ring around the selected component Ã¢â‚¬â€ for cross-probing from the 2D map. */
 function SelectionRing({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>

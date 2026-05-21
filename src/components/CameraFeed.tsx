@@ -68,7 +68,7 @@ export default function CameraFeed() {
 
   return (
     <div className="panel-border panel-bg rounded-lg overflow-hidden w-[220px]">
-      <div className="w-full h-[140px] bg-muted flex items-center justify-center relative overflow-hidden">
+      <div className="w-full h-[90px] bg-muted flex items-center justify-center relative overflow-hidden">
         {/* Always render video so ref is always available */}
         <video
           ref={videoRef}
@@ -92,7 +92,7 @@ export default function CameraFeed() {
         )}
       </div>
       <canvas ref={canvasRef} className="hidden" />
-      <p className="text-center text-xs text-muted-foreground py-1">
+      <p className="text-center text-[10px] text-muted-foreground py-0.5">
         {active ? "Live Feed" : "No Feed"}
       </p>
     </div>

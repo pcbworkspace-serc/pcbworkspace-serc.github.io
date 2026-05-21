@@ -255,7 +255,7 @@ function PCBBoard() {
   );
 }
 
-function GenericComponent({ label }: { label: string }) {
+function GenericComponent({ label: _label }: { label: string }) {
   return (
     <group>
       <mesh position={[0, 0.05, 0]}>
@@ -264,13 +264,8 @@ function GenericComponent({ label }: { label: string }) {
       </mesh>
       <mesh position={[0, 0.11, 0]}>
         <boxGeometry args={[0.55, 0.02, 0.35]} />
-        <meshStandardMaterial color="#1f2937" />
+        <meshStandardMaterial color="#67e8f9" emissive="#0891b2" emissiveIntensity={0.3} />
       </mesh>
-      <Html position={[0, 0.2, 0]} center distanceFactor={6}>
-        <div style={{ color: "#67e8f9", fontSize: 9, fontFamily: "monospace", fontWeight: 700, whiteSpace: "nowrap", pointerEvents: "none", userSelect: "none" }}>
-          {label}
-        </div>
-      </Html>
     </group>
   );
 }
@@ -346,7 +341,7 @@ function PinSphere({
   );
 }
 
-/** Glowing amber ring around the selected component â€” for cross-probing from the 2D map. */
+/** Glowing amber ring around the selected component Ã¢â‚¬â€ for cross-probing from the 2D map. */
 function SelectionRing({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>

@@ -1,4 +1,4 @@
-import PCBWorkspace from "@/components/PCBWorkspace";
+﻿import PCBWorkspace from "@/components/PCBWorkspace";
 import Inventory from "@/components/Inventory";
 import CameraFeed from "@/components/CameraFeed";
 import RobotPanel from "@/components/RobotPanel";
@@ -358,7 +358,7 @@ const Index = () => {
         <span className="text-xs font-semibold text-white mr-2">{email}</span>
         <button type="button" onClick={() => navigate("/login", { replace: true })} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Switch Account</button>
         <button type="button" onClick={() => { clearSession(); navigate("/login", { replace: true }); }} className="text-xs rounded border border-white/40 px-2 py-1 text-white hover:bg-white/10 transition-colors">Logout</button>
-        <a href="https://spaceroboticscreations.com/" target="_blank" rel="noopener noreferrer" className="text-[#00d4ff] text-xs font-bold opacity-70 hover:opacity-100 transition-opacity">SERC ↗</a>
+        <a href="https://spaceroboticscreations.com/" target="_blank" rel="noopener noreferrer" className="text-[#00d4ff] text-xs font-bold opacity-70 hover:opacity-100 transition-opacity">SERC â†—</a>
         <TeachMode />
         <RobotConnect />
       </div>
@@ -373,14 +373,10 @@ const Index = () => {
         </div>
         <div className="flex flex-col gap-3 flex-1 overflow-y-auto">
           <div className="relative"><CameraFeed /><CalibrateButton /></div>
-          <div className="bg-black/20 rounded-xl p-3 border border-black/10">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-black font-black text-[10px] uppercase tracking-widest">JEPA Vision</h3>
-              <span className="text-[8px] bg-black text-[#00a3ff] px-1.5 py-0.5 rounded font-black">LIVE</span>
-            </div>
-            <NNPanel />
-            <button type="button" onClick={() => setShowDemo(true)} className="mt-2 w-full py-2 bg-black text-[#00a3ff] text-[10px] font-black rounded uppercase tracking-widest hover:bg-black/80 transition-colors">Open Demo</button>
-          </div>
+          <button type="button" onClick={() => setShowDemo(true)} className="bg-black/20 rounded-xl p-3 border border-black/10 hover:bg-black/30 transition-colors text-left flex items-center justify-between">
+            <span className="text-black font-black text-[10px] uppercase tracking-widest">JEPA Vision Demo</span>
+            <span className="text-[8px] bg-black text-[#00a3ff] px-1.5 py-0.5 rounded font-black">OPEN</span>
+          </button>
           <Inventory />
           <RobotPanel />
         </div>

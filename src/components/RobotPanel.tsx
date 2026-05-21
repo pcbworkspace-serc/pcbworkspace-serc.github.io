@@ -1,5 +1,5 @@
-/**
- * Robot control panel — sits in the left blue sidebar below Inventory.
+﻿/**
+ * Robot control panel â€” sits in the left blue sidebar below Inventory.
  * Styled to match the existing JEPA Vision / Inventory cards
  * (bg-black/20 rounded-xl, black-text headers, similar typography).
  *
@@ -11,7 +11,7 @@
  *   <RobotPanel />          // <-- right after Inventory in the sidebar
  *
  * Sends structured robot commands (move/pick/home/etc.) to /robot/chat.
- * Natural-language Q&A is intentionally NOT here — Layla owns that.
+ * Natural-language Q&A is intentionally NOT here â€” Layla owns that.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRobotStatus } from "@/hooks/useRobotStatus";
@@ -69,7 +69,7 @@ export default function RobotPanel() {
     finally { setBusy(false); }
   }, [append]);
 
-  // Status pill ── matches the UI's color language: emerald=ok, yellow=moving, red=stopped/err
+  // Status pill â”€â”€ matches the UI's color language: emerald=ok, yellow=moving, red=stopped/err
   const pillTone = (() => {
     if (statusError) return "bg-red-500/20 text-red-200 border-red-500/40";
     if (!status) return "bg-black/30 text-white/60 border-white/10";
@@ -80,7 +80,7 @@ export default function RobotPanel() {
   })();
 
   const pillText = (() => {
-    if (statusError) return "BACKEND DOWN";
+    if (statusError) return "OFFLINE";
     if (!status) return "CONNECTING";
     if (status.estopped) return "ESTOPPED";
     if (status.moving) return "MOVING";
@@ -148,7 +148,7 @@ export default function RobotPanel() {
       {/* Calibration warning */}
       {status && (!status.calibrated.camera || !status.calibrated.workspace) && (
         <div className="text-[9px] text-black/70 mb-2 leading-tight">
-          ⚠ {!status.calibrated.camera && "Camera"}
+          âš  {!status.calibrated.camera && "Camera"}
           {!status.calibrated.camera && !status.calibrated.workspace && " + "}
           {!status.calibrated.workspace && "Workspace"} not calibrated.
           Click Calibrate on the camera feed.
@@ -161,16 +161,16 @@ export default function RobotPanel() {
         className="bg-black/40 rounded h-[100px] overflow-y-auto p-1.5 mb-1.5 font-mono text-[9px] leading-snug space-y-0.5 border border-black/20"
       >
         {log.map((e, i) => {
-          if (e.kind === "user") return <div key={i} className="text-[#00d4ff]">› {e.text}</div>;
+          if (e.kind === "user") return <div key={i} className="text-[#00d4ff]">â€º {e.text}</div>;
           if (e.kind === "info") return <div key={i} className="text-white/40 italic">{e.text}</div>;
           if (e.kind === "error") return <div key={i} className="text-red-400">! {e.text}</div>;
           const cls = e.entry.ok ? "text-emerald-300" : "text-red-400";
           const detail = e.entry.error
-            ? ` — ${e.entry.error}`
+            ? ` â€” ${e.entry.error}`
             : e.entry.result
             ? ` ${JSON.stringify(e.entry.result)}`
             : "";
-          return <div key={i} className={cls}>{e.entry.ok ? "✓" : "✗"} {e.entry.line}{detail}</div>;
+          return <div key={i} className={cls}>{e.entry.ok ? "âœ“" : "âœ—"} {e.entry.line}{detail}</div>;
         })}
       </div>
 

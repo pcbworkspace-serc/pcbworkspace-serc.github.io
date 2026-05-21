@@ -61,6 +61,67 @@ function TransistorIcon() {
   );
 }
 
+function ICIcon() {
+  return (
+    <svg viewBox="0 0 24 20" className="w-6 h-5 text-cyan-100" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="6" y="3" width="12" height="14" rx="1" />
+      <circle cx="9" cy="6" r="0.8" fill="currentColor" />
+      <line x1="2" y1="6" x2="6" y2="6" />
+      <line x1="2" y1="10" x2="6" y2="10" />
+      <line x1="2" y1="14" x2="6" y2="14" />
+      <line x1="18" y1="6" x2="22" y2="6" />
+      <line x1="18" y1="10" x2="22" y2="10" />
+      <line x1="18" y1="14" x2="22" y2="14" />
+    </svg>
+  );
+}
+
+function InductorIcon() {
+  return (
+    <svg viewBox="0 0 36 12" className="w-9 h-3 text-cyan-100" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round">
+      <line x1="0" y1="8" x2="4" y2="8" />
+      <path d="M 4 8 Q 7 0 10 8 Q 13 0 16 8 Q 19 0 22 8 Q 25 0 28 8 Q 31 0 34 8" />
+      <line x1="34" y1="8" x2="36" y2="8" />
+    </svg>
+  );
+}
+
+function CrystalIcon() {
+  return (
+    <svg viewBox="0 0 28 14" className="w-7 h-3 text-cyan-100" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round">
+      <line x1="0" y1="7" x2="8" y2="7" />
+      <line x1="8" y1="2" x2="8" y2="12" />
+      <rect x="10" y="3" width="8" height="8" />
+      <line x1="20" y1="2" x2="20" y2="12" />
+      <line x1="20" y1="7" x2="28" y2="7" />
+    </svg>
+  );
+}
+
+function SwitchIcon() {
+  return (
+    <svg viewBox="0 0 28 14" className="w-7 h-3 text-cyan-100" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round">
+      <line x1="0" y1="10" x2="8" y2="10" />
+      <line x1="8" y1="10" x2="18" y2="2" />
+      <circle cx="8" cy="10" r="1.5" fill="currentColor" />
+      <circle cx="20" cy="10" r="1.5" fill="currentColor" />
+      <line x1="20" y1="10" x2="28" y2="10" />
+    </svg>
+  );
+}
+
+function HeaderIcon() {
+  return (
+    <svg viewBox="0 0 28 12" className="w-7 h-3 text-cyan-100" stroke="currentColor" strokeWidth="1.2" fill="none">
+      <rect x="2" y="2" width="24" height="8" />
+      <circle cx="6" cy="6" r="1" fill="currentColor" />
+      <circle cx="11" cy="6" r="1" fill="currentColor" />
+      <circle cx="16" cy="6" r="1" fill="currentColor" />
+      <circle cx="21" cy="6" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
 interface ItemDef { type: string; icon: ReactNode }
 const items: ItemDef[] = [
   { type: "Resistor",   icon: <ResistorIcon /> },
@@ -68,6 +129,11 @@ const items: ItemDef[] = [
   { type: "Diode",      icon: <DiodeIcon /> },
   { type: "LED",        icon: <LEDIcon /> },
   { type: "Transistor", icon: <TransistorIcon /> },
+  { type: "IC",         icon: <ICIcon /> },
+  { type: "Inductor",   icon: <InductorIcon /> },
+  { type: "Crystal",    icon: <CrystalIcon /> },
+  { type: "Switch",     icon: <SwitchIcon /> },
+  { type: "Header",     icon: <HeaderIcon /> },
 ];
 
 export default function Inventory() {

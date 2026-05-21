@@ -123,14 +123,17 @@ function ElapsedTimer() {
     const id = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(id);
   }, []);
-  let hint = "Detecting components...";
-  if (seconds > 15) hint = "Still working — backend may be waking up from sleep.";
-  if (seconds > 45) hint = "Cold start can take up to a minute. Hang in there.";
+  let hint = "Running detection on the PCB image...";
+  let sub = "First-time runs take 30-60 seconds. Subsequent runs are faster.";
+  if (seconds > 15) { hint = "Still working - backend may be waking up from sleep."; sub = "Render free-tier backends sleep after 15 min of inactivity."; }
+  if (seconds > 45) { hint = "Cold start can take up to a minute."; sub = "Hang in there - the model is loading into memory."; }
+  if (seconds > 90) { hint = "This is taking longer than usual."; sub = "If it still hasn't finished in another 30s, the backend might be down."; }
   return (
-    <div className="py-10 text-center">
-      <div className="inline-block w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-      <p className="mt-4 text-sm text-foreground">{hint}</p>
-      <p className="mt-1 text-xs font-mono text-muted-foreground">{seconds}s elapsed</p>
+    <div className="py-12 text-center">
+      <div className="inline-block w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <p className="mt-5 text-base font-semibold text-foreground">{hint}</p>
+      <p className="mt-2 text-xs text-muted-foreground max-w-sm mx-auto">{sub}</p>
+      <p className="mt-3 text-xs font-mono text-primary">{seconds}s elapsed</p>
     </div>
   );
 }
@@ -170,7 +173,7 @@ export default function DetectModal({
 
         <h2 className="text-2xl font-bold text-primary mb-1">PCB Detection</h2>
 
-        {/* Method picker — moved here from the toolbar */}
+        {/* Method picker â€” moved here from the toolbar */}
         <div className="flex items-center gap-2 mb-4">
           <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Method:</span>
           <div className="flex items-stretch rounded-md border border-primary/30 overflow-hidden text-[10px] font-bold uppercase tracking-wider">
@@ -197,7 +200,7 @@ export default function DetectModal({
         </div>
 
         <p className="text-xs text-muted-foreground mb-5">
-          {result?.mlModel ?? "Layla Vision · CNN backend"}
+          {result?.mlModel ?? "Layla Vision Â· CNN backend"}
         </p>
 
         {loading && <ElapsedTimer />}
@@ -230,13 +233,13 @@ export default function DetectModal({
               </div>
             )}
 
-            {/* Empty state — no boxes found */}
+            {/* Empty state â€” no boxes found */}
             {noBoxes && (
               <div className="mb-5 px-3 py-3 rounded-md bg-blue-500/10 border border-blue-500/30 text-[12px] text-blue-300">
                 <p className="font-bold mb-1">No components detected.</p>
                 <p className="text-blue-300/70">
                   Try the other detection method, or upload a clearer image of a PCB.
-                  This model was trained on the FPIC dataset — close-ups of green PCBs with surface-mount parts work best.
+                  This model was trained on the FPIC dataset â€” close-ups of green PCBs with surface-mount parts work best.
                 </p>
               </div>
             )}
@@ -259,7 +262,7 @@ export default function DetectModal({
                       <span className="text-muted-foreground">{b.class_full}</span>
                       {(b as any).yolo_score !== undefined && (
                         <span className="text-[9px] text-muted-foreground/70 font-mono ml-1">
-                          yolo {((b as any).yolo_score * 100).toFixed(0)}% · cls {((b as any).classifier_score * 100).toFixed(0)}%
+                          yolo {((b as any).yolo_score * 100).toFixed(0)}% Â· cls {((b as any).classifier_score * 100).toFixed(0)}%
                         </span>
                       )}
                       <span className="ml-auto font-mono" style={{ color: scoreColor(b.score) }}>

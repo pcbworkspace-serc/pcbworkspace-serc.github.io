@@ -255,6 +255,26 @@ function PCBBoard() {
   );
 }
 
+function GenericComponent({ label }: { label: string }) {
+  return (
+    <group>
+      <mesh position={[0, 0.05, 0]}>
+        <boxGeometry args={[0.6, 0.1, 0.4]} />
+        <meshStandardMaterial color="#374151" />
+      </mesh>
+      <mesh position={[0, 0.11, 0]}>
+        <boxGeometry args={[0.55, 0.02, 0.35]} />
+        <meshStandardMaterial color="#1f2937" />
+      </mesh>
+      <Html position={[0, 0.2, 0]} center distanceFactor={6}>
+        <div style={{ color: "#67e8f9", fontSize: 9, fontFamily: "monospace", fontWeight: 700, whiteSpace: "nowrap", pointerEvents: "none", userSelect: "none" }}>
+          {label}
+        </div>
+      </Html>
+    </group>
+  );
+}
+
 function PCBComponent({ label }: { label: string }) {
   switch (label) {
     case "Resistor":   return <Resistor />;
@@ -262,7 +282,7 @@ function PCBComponent({ label }: { label: string }) {
     case "Diode":      return <Diode />;
     case "LED":        return <LED />;
     case "Transistor": return <Transistor />;
-    default:           return null;
+    default:           return <GenericComponent label={label} />;
   }
 }
 
@@ -326,7 +346,7 @@ function PinSphere({
   );
 }
 
-/** Glowing amber ring around the selected component — for cross-probing from the 2D map. */
+/** Glowing amber ring around the selected component â€” for cross-probing from the 2D map. */
 function SelectionRing({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>

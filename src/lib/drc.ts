@@ -7,13 +7,18 @@ export type DRCViolation =
   | { type: "overlap"; a: number; b: number; message: string }
   | { type: "out_of_bounds"; index: number; message: string };
 
-// Rough footprint in mm (width × height) at rotation = 0
+// Rough footprint in mm (width Ã— height) at rotation = 0
 const FOOTPRINTS: Record<string, [number, number]> = {
   Resistor:   [8, 4],
   Capacitor:  [4, 4],
   Diode:      [6, 3],
   LED:        [4, 4],
   Transistor: [4, 3],
+  IC:         [10, 8],
+  Inductor:   [8, 4],
+  Crystal:    [7, 4],
+  Switch:     [6, 5],
+  Header:     [10, 5],
 };
 const DEFAULT_FOOTPRINT: [number, number] = [5, 5];
 

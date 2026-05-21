@@ -371,7 +371,7 @@ const Index = () => {
             <p className="text-[11px] font-semibold text-black/70">Be My Engineer!</p>
           </div>
         </div>
-        <div className="flex flex-col gap-3 flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-2 flex-1 overflow-y-auto">
           <div className="relative"><CameraFeed /><CalibrateButton /></div>
           <button type="button" onClick={() => setShowDemo(true)} className="bg-black/20 rounded-xl p-3 border border-black/10 hover:bg-black/30 transition-colors text-left flex items-center justify-between">
             <span className="text-black font-black text-[10px] uppercase tracking-widest">JEPA Vision Demo</span>

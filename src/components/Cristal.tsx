@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 /**
  * Cristal — easter egg siamese cat that strolls across the workspace once
  * whenever a Crystal component is placed. Named after the developer's cat.
- * Profile view, adult proportions, slow lazy gait. One pass per placement.
+ * Adult profile, walking right, one pass only.
  */
 interface CristalProps {
   crystalCount: number;
@@ -15,7 +15,7 @@ export default function Cristal({ crystalCount }: CristalProps) {
   useEffect(() => {
     if (crystalCount === 0) return;
     setWalking(true);
-    const t = setTimeout(() => setWalking(false), 16000);
+    const t = setTimeout(() => setWalking(false), 14000);
     return () => clearTimeout(t);
   }, [crystalCount]);
 
@@ -25,116 +25,138 @@ export default function Cristal({ crystalCount }: CristalProps) {
     <div
       style={{
         position: "absolute",
-        bottom: 18,
-        left: "-130px",
-        width: 110,
-        height: 70,
+        bottom: 12,
+        left: "-160px",
+        width: 140,
+        height: 80,
         pointerEvents: "none",
         zIndex: 50,
-        animation: "cristal-walk 16s linear forwards",
+        animation: "cristal-walk 14s linear forwards",
       }}
     >
-      <div style={{ animation: "cristal-bounce 0.9s ease-in-out infinite" }}>
-        <svg viewBox="0 0 160 90" width="110" height="70">
-          {/* tail — long, curved up, swishing */}
-          <path d="M 22 50 Q 4 38 6 18 Q 8 6 16 8" stroke="#5a3a1f" strokeWidth="5" fill="none" strokeLinecap="round">
-            <animate attributeName="d"
-              values="M 22 50 Q 4 38 6 18 Q 8 6 16 8;
-                      M 22 50 Q 2 42 4 22 Q 4 8 14 10;
-                      M 22 50 Q 4 38 6 18 Q 8 6 16 8"
-              dur="2.2s" repeatCount="indefinite" />
-          </path>
-          {/* tail cream highlight */}
-          <path d="M 22 50 Q 4 38 6 18 Q 8 6 16 8" stroke="#f5e6d3" strokeWidth="1.5" fill="none" strokeLinecap="round" opacity="0.5" />
+      <div style={{ animation: "cristal-bounce 0.85s ease-in-out infinite" }}>
+        <svg viewBox="0 0 200 110" width="140" height="80">
+          <defs>
+            <linearGradient id="cristalBody" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#f7ecda" />
+              <stop offset="60%" stopColor="#ecdcc0" />
+              <stop offset="100%" stopColor="#d9c4a3" />
+            </linearGradient>
+            <radialGradient id="cristalHaunch" cx="0.5" cy="0.4" r="0.6">
+              <stop offset="0%" stopColor="#f7ecda" />
+              <stop offset="100%" stopColor="#c9b393" />
+            </radialGradient>
+          </defs>
 
-          {/* body — elongated cream torso */}
-          <ellipse cx="65" cy="50" rx="38" ry="14" fill="#f5e6d3" />
-          {/* belly shadow */}
-          <ellipse cx="65" cy="56" rx="32" ry="6" fill="#e8d6bf" opacity="0.6" />
+          {/* tail — long, low, slight curl at tip, dark brown */}
+          <path d="M 18 70 Q 28 64 42 66" stroke="#3a2510" strokeWidth="6" fill="none" strokeLinecap="round" />
+          <path d="M 18 70 Q 28 64 42 66" stroke="#5a3a1f" strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.6" />
 
-          {/* back leg far — animated step */}
+          {/* haunch / back leg muscle area */}
+          <ellipse cx="58" cy="62" rx="20" ry="20" fill="url(#cristalHaunch)" />
+
+          {/* body — long and lean */}
+          <path d="M 50 55 Q 70 48 110 50 Q 145 52 158 56 Q 162 60 158 66 Q 145 72 110 70 Q 70 70 50 65 Z"
+                fill="url(#cristalBody)" />
+          {/* back arch line */}
+          <path d="M 50 55 Q 80 46 110 49 Q 140 52 158 56" stroke="#d9c4a3" strokeWidth="0.5" fill="none" opacity="0.6" />
+
+          {/* chest / belly underline */}
+          <path d="M 68 68 Q 95 73 130 70" stroke="#c9b393" strokeWidth="1" fill="none" opacity="0.5" />
+
+          {/* BACK LEGS — dark brown points */}
+          {/* far back leg */}
           <g>
-            <rect x="38" y="58" width="6" height="14" fill="#5a3a1f" rx="2">
-              <animate attributeName="height" values="14;10;14" dur="1.8s" repeatCount="indefinite" />
-              <animate attributeName="y" values="58;58;58" dur="1.8s" repeatCount="indefinite" />
-            </rect>
-            <ellipse cx="41" cy="73" rx="4" ry="2" fill="#3a2510">
-              <animate attributeName="cy" values="73;69;73" dur="1.8s" repeatCount="indefinite" />
+            <path d="M 54 70 Q 50 80 49 86" stroke="#3a2510" strokeWidth="7" fill="none" strokeLinecap="round" />
+            <ellipse cx="49" cy="88" rx="5" ry="2.5" fill="#1f1408">
+              <animate attributeName="cy" values="88;84;88" dur="1.7s" repeatCount="indefinite" />
             </ellipse>
+            <animate attributeName="opacity" values="0.85;1;0.85" dur="1.7s" repeatCount="indefinite" />
           </g>
-          {/* back leg near */}
+          {/* near back leg */}
           <g>
-            <rect x="48" y="58" width="6" height="14" fill="#6b4423" rx="2">
-              <animate attributeName="height" values="10;14;10" dur="1.8s" repeatCount="indefinite" />
-            </rect>
-            <ellipse cx="51" cy="73" rx="4" ry="2" fill="#3a2510">
-              <animate attributeName="cy" values="69;73;69" dur="1.8s" repeatCount="indefinite" />
-            </ellipse>
-          </g>
-          {/* front leg far */}
-          <g>
-            <rect x="86" y="58" width="6" height="14" fill="#5a3a1f" rx="2">
-              <animate attributeName="height" values="10;14;10" dur="1.8s" repeatCount="indefinite" begin="0.9s" />
-            </rect>
-            <ellipse cx="89" cy="73" rx="4" ry="2" fill="#3a2510">
-              <animate attributeName="cy" values="69;73;69" dur="1.8s" repeatCount="indefinite" begin="0.9s" />
-            </ellipse>
-          </g>
-          {/* front leg near */}
-          <g>
-            <rect x="96" y="58" width="6" height="14" fill="#6b4423" rx="2">
-              <animate attributeName="height" values="14;10;14" dur="1.8s" repeatCount="indefinite" begin="0.9s" />
-            </rect>
-            <ellipse cx="99" cy="73" rx="4" ry="2" fill="#3a2510">
-              <animate attributeName="cy" values="73;69;73" dur="1.8s" repeatCount="indefinite" begin="0.9s" />
+            <path d="M 64 70 Q 64 80 66 86" stroke="#5a3a1f" strokeWidth="7" fill="none" strokeLinecap="round">
+              <animate attributeName="d"
+                values="M 64 70 Q 64 80 66 86; M 64 70 Q 68 78 72 82; M 64 70 Q 64 80 66 86"
+                dur="1.7s" repeatCount="indefinite" />
+            </path>
+            <ellipse cx="66" cy="88" rx="5" ry="2.5" fill="#1f1408">
+              <animate attributeName="cx" values="66;72;66" dur="1.7s" repeatCount="indefinite" />
+              <animate attributeName="cy" values="88;83;88" dur="1.7s" repeatCount="indefinite" />
             </ellipse>
           </g>
 
-          {/* neck — narrow bridge between body and head */}
-          <path d="M 102 48 Q 108 42 116 38" stroke="#f5e6d3" strokeWidth="11" fill="none" strokeLinecap="round" />
+          {/* FRONT LEGS — dark brown points */}
+          {/* far front leg */}
+          <g>
+            <path d="M 138 68 Q 137 80 136 86" stroke="#3a2510" strokeWidth="6" fill="none" strokeLinecap="round" />
+            <ellipse cx="136" cy="88" rx="4.5" ry="2.5" fill="#1f1408">
+              <animate attributeName="cy" values="88;84;88" dur="1.7s" repeatCount="indefinite" begin="0.85s" />
+            </ellipse>
+          </g>
+          {/* near front leg — animated forward step */}
+          <g>
+            <path d="M 148 68 Q 150 80 152 86" stroke="#5a3a1f" strokeWidth="6" fill="none" strokeLinecap="round">
+              <animate attributeName="d"
+                values="M 148 68 Q 150 80 152 86; M 148 68 Q 154 78 158 82; M 148 68 Q 150 80 152 86"
+                dur="1.7s" repeatCount="indefinite" begin="0.85s" />
+            </path>
+            <ellipse cx="152" cy="88" rx="4.5" ry="2.5" fill="#1f1408">
+              <animate attributeName="cx" values="152;158;152" dur="1.7s" repeatCount="indefinite" begin="0.85s" />
+              <animate attributeName="cy" values="88;83;88" dur="1.7s" repeatCount="indefinite" begin="0.85s" />
+            </ellipse>
+          </g>
 
-          {/* head — profile view, pointing right */}
-          <ellipse cx="124" cy="32" rx="14" ry="11" fill="#f5e6d3" />
-          {/* siamese face mask — covers muzzle and around eye */}
-          <ellipse cx="134" cy="34" rx="9" ry="7" fill="#6b4423" />
-          {/* cream stripe down face */}
-          <ellipse cx="128" cy="31" rx="3" ry="6" fill="#f5e6d3" />
-          {/* chin */}
-          <ellipse cx="134" cy="38" rx="4" ry="2" fill="#f5e6d3" />
+          {/* shoulder blade hint */}
+          <ellipse cx="138" cy="56" rx="10" ry="8" fill="url(#cristalHaunch)" opacity="0.6" />
 
-          {/* ear far (smaller, slightly behind) */}
-          <polygon points="118,22 116,10 124,18" fill="#5a3a1f" />
-          <polygon points="119,20 118,14 122,18" fill="#f4a8a8" />
-          {/* ear near */}
-          <polygon points="128,20 126,6 134,16" fill="#6b4423" />
-          <polygon points="129,18 128,10 132,16" fill="#f4a8a8" />
+          {/* neck — angled forward and slightly down */}
+          <path d="M 152 56 Q 162 50 170 46" stroke="#f7ecda" strokeWidth="13" fill="none" strokeLinecap="round" />
 
-          {/* single eye visible (profile) — blue almond */}
-          <ellipse cx="130" cy="29" rx="2.2" ry="2.8" fill="#5ab0ff" />
-          <ellipse cx="130" cy="29" rx="0.9" ry="2.4" fill="#000" />
-          <circle cx="130.5" cy="28.5" r="0.5" fill="#fff" />
+          {/* head — pointed siamese wedge profile */}
+          <path d="M 162 42 Q 170 36 184 38 Q 192 42 188 50 Q 180 54 168 52 Q 160 50 162 42 Z"
+                fill="#f7ecda" />
 
-          {/* pink nose at tip of muzzle */}
-          <ellipse cx="140" cy="34" rx="1.8" ry="1.5" fill="#e8a8a8" />
+          {/* dark mask — face points */}
+          <path d="M 178 42 Q 192 42 190 50 Q 184 54 176 52 Q 176 46 178 42 Z" fill="#5a3a1f" />
+          {/* mask edge softening */}
+          <path d="M 174 44 Q 178 42 184 43" stroke="#8a6038" strokeWidth="1" fill="none" opacity="0.5" />
+
+          {/* ears — large pointed siamese ears, dark */}
+          <polygon points="164,38 162,22 174,32" fill="#3a2510" />
+          <polygon points="166,34 165,26 171,32" fill="#e8a8a8" opacity="0.7" />
+          <polygon points="176,34 178,18 184,32" fill="#3a2510" />
+          <polygon points="178,30 179,22 182,30" fill="#e8a8a8" opacity="0.7" />
+
+          {/* eye — almond, bright blue, profile */}
+          <ellipse cx="180" cy="44" rx="2.5" ry="3" fill="#5ab8ff" />
+          <ellipse cx="180" cy="44" rx="1" ry="2.8" fill="#0a0a0a" />
+          <circle cx="180.5" cy="43" r="0.5" fill="#fff" />
+          {/* eye outline */}
+          <path d="M 178 42 Q 180 41 183 43" stroke="#3a2510" strokeWidth="0.4" fill="none" />
+          <path d="M 178 46 Q 180 47 183 45" stroke="#3a2510" strokeWidth="0.4" fill="none" />
+
+          {/* nose — small pink */}
+          <ellipse cx="190" cy="47" rx="1.5" ry="1.2" fill="#d49a9a" />
+
           {/* mouth */}
-          <path d="M 140 36 Q 138 38 136 37" stroke="#3a2510" strokeWidth="0.6" fill="none" strokeLinecap="round" />
+          <path d="M 190 49 Q 187 51 184 50" stroke="#3a2510" strokeWidth="0.5" fill="none" strokeLinecap="round" />
+
           {/* whiskers */}
-          <line x1="136" y1="35" x2="128" y2="34" stroke="#3a2510" strokeWidth="0.4" />
-          <line x1="136" y1="36" x2="128" y2="37" stroke="#3a2510" strokeWidth="0.4" />
-          <line x1="139" y1="35" x2="146" y2="33" stroke="#3a2510" strokeWidth="0.4" />
-          <line x1="139" y1="36" x2="146" y2="38" stroke="#3a2510" strokeWidth="0.4" />
+          <line x1="185" y1="48" x2="172" y2="46" stroke="#2a1a08" strokeWidth="0.3" opacity="0.7" />
+          <line x1="185" y1="49" x2="172" y2="50" stroke="#2a1a08" strokeWidth="0.3" opacity="0.7" />
+          <line x1="190" y1="48" x2="198" y2="44" stroke="#2a1a08" strokeWidth="0.3" opacity="0.7" />
+          <line x1="190" y1="50" x2="198" y2="52" stroke="#2a1a08" strokeWidth="0.3" opacity="0.7" />
         </svg>
       </div>
       <style>{`
         @keyframes cristal-walk {
-          0%   { transform: translateX(0)         scaleX(1); }
-          47%  { transform: translateX(1100px)    scaleX(1); }
-          50%  { transform: translateX(1100px)    scaleX(-1); }
-          100% { transform: translateX(0)         scaleX(-1); }
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(1400px); }
         }
         @keyframes cristal-bounce {
           0%, 100% { transform: translateY(0); }
-          50%      { transform: translateY(-2px); }
+          50%      { transform: translateY(-1.5px); }
         }
       `}</style>
     </div>

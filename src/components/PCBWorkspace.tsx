@@ -282,6 +282,33 @@ function IC() {
   );
 }
 
+function IC() {
+  return (
+    <group>
+      <mesh position={[0, 0.1, 0]}>
+        <boxGeometry args={[0.5, 0.1, 0.3]} />
+        <meshStandardMaterial color="#0a0a0a" roughness={0.4} />
+      </mesh>
+      <mesh position={[-0.2, 0.16, -0.1]}>
+        <boxGeometry args={[0.025, 0.005, 0.025]} />
+        <meshStandardMaterial color="#ffffff" />
+      </mesh>
+      {[-0.18, -0.06, 0.06, 0.18].map((xOff, i) => (
+        <mesh key={`p1-${i}`} position={[xOff, 0.04, -0.18]}>
+          <boxGeometry args={[0.025, 0.02, 0.05]} />
+          <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
+        </mesh>
+      ))}
+      {[-0.18, -0.06, 0.06, 0.18].map((xOff, i) => (
+        <mesh key={`p2-${i}`} position={[xOff, 0.04, 0.18]}>
+          <boxGeometry args={[0.025, 0.02, 0.05]} />
+          <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 function GenericComponent({ label: _label }: { label: string }) {
   return (
     <group>
@@ -368,7 +395,7 @@ function PinSphere({
   );
 }
 
-/** Glowing amber ring around the selected component ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â for cross-probing from the 2D map. */
+/** Glowing amber ring around the selected component ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â for cross-probing from the 2D map. */
 function SelectionRing({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>

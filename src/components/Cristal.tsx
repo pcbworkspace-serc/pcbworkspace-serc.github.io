@@ -42,7 +42,7 @@ export default function Cristal({ crystalCount }: CristalProps) {
       <style>{`
         @keyframes cristal-walk {
           0%   { transform: translate(0, 0); }
-          100% { transform: translate(1500px, -300px); }
+          100% { transform: translate(calc(100vw + 200px), -300px); }
         }
       `}</style>
     </div>

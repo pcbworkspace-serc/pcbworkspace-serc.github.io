@@ -1,8 +1,9 @@
-﻿import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, Grid } from "@react-three/drei";
 import * as THREE from "three";
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { getPins } from "@/lib/pins";
+import { useRobotPlacement } from "@/hooks/useRobotPlacement";
 
 interface DroppedItem {
   type: string;
@@ -545,6 +546,7 @@ export default function PCBWorkspace({
 }: PCBWorkspaceProps) {
   const [droppedItems, setDroppedItems] = useState<DroppedItem[]>(items ?? []);
   useEffect(() => { if (items) setDroppedItems(items); }, [items]);
+  const placeOnRobot = useRobotPlacement();
 
 const cameraRef = useRef<THREE.Camera | null>(null);
   const handleDrop = useCallback((e: React.DragEvent) => {

@@ -283,6 +283,41 @@ function IC() {
   );
 }
 
+function Inductor() {
+  return (
+    <group>
+      <mesh position={[0, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.08, 0.08, 0.3, 16]} />
+        <meshStandardMaterial color="#2a2a2a" roughness={0.7} />
+      </mesh>
+      <mesh position={[-0.1, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.105, 0.105, 0.04, 16]} />
+        <meshStandardMaterial color="#b87333" metalness={0.85} roughness={0.3} />
+      </mesh>
+      <mesh position={[-0.04, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.105, 0.105, 0.04, 16]} />
+        <meshStandardMaterial color="#b87333" metalness={0.85} roughness={0.3} />
+      </mesh>
+      <mesh position={[0.04, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.105, 0.105, 0.04, 16]} />
+        <meshStandardMaterial color="#b87333" metalness={0.85} roughness={0.3} />
+      </mesh>
+      <mesh position={[0.1, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.105, 0.105, 0.04, 16]} />
+        <meshStandardMaterial color="#b87333" metalness={0.85} roughness={0.3} />
+      </mesh>
+      <mesh position={[-0.22, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.012, 0.012, 0.14, 8]} />
+        <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
+      </mesh>
+      <mesh position={[0.22, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.012, 0.012, 0.14, 8]} />
+        <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.2} />
+      </mesh>
+    </group>
+  );
+}
+
 function GenericComponent({ label: _label }: { label: string }) {
   return (
     <group>
@@ -306,6 +341,7 @@ function PCBComponent({ label }: { label: string }) {
     case "LED":        return <LED />;
     case "Transistor": return <Transistor />;
     case "IC":         return <IC />;
+    case "Inductor":   return <Inductor />;
     default:           return <GenericComponent label={label} />;
   }
 }
@@ -370,7 +406,7 @@ function PinSphere({
   );
 }
 
-/** Glowing amber ring around the selected component ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â for cross-probing from the 2D map. */
+/** Glowing amber ring around the selected component ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â for cross-probing from the 2D map. */
 function SelectionRing({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>

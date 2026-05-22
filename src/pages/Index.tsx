@@ -11,6 +11,7 @@ import Minimap2D from "@/components/Minimap2D";
 import RobotConnect from "@/components/RobotConnect";
 import TeachMode from "@/components/TeachMode";
 import RobotStatus from "@/components/RobotStatus";
+import Cristal from "@/components/Cristal";
 import { installSerialRecorder } from "@/lib/teach";
 import { installRobotStateListener } from "@/lib/robot_state";
 import { getMultiLabelDetection, getDetectBoxesByMethod, wakeBackend, type ClassPrediction, type DetectionBox, type DetectionMethod } from "@/lib/nn";
@@ -469,6 +470,7 @@ const Index = () => {
       )}
 
       <RobotStatus />
+      <Cristal crystalCount={boardItems.filter(i => i.type === "Crystal").length} />
     </div>
   );
 };

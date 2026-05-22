@@ -1,7 +1,7 @@
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, Grid } from "@react-three/drei";
 import * as THREE from "three";
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { getPins } from "@/lib/pins";
 
 interface DroppedItem {
@@ -446,6 +446,12 @@ function GenericComponent({ label: _label }: { label: string }) {
   );
 }
 
+function CameraGrabber({ targetRef }: { targetRef: React.MutableRefObject<THREE.Camera | null> }) {
+  const { camera } = useThree();
+  useEffect(() => { targetRef.current = camera; }, [camera, targetRef]);
+  return null;
+}
+
 function PCBComponent({ label }: { label: string }) {
   switch (label) {
     case "Resistor":   return <Resistor />;
@@ -540,13 +546,29 @@ export default function PCBWorkspace({
   const [droppedItems, setDroppedItems] = useState<DroppedItem[]>(items ?? []);
   useEffect(() => { if (items) setDroppedItems(items); }, [items]);
 
+const cameraRef = useRef<THREE.Camera | null>(null);
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const type = e.dataTransfer.getData("text/plain");
     if (!type) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 6 - 3;
-    const y = ((e.clientY - rect.top) / rect.height) * -4 + 2;
+    const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const ndcY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+    let x = 0, y = 0;
+    const cam = cameraRef.current;
+    if (cam) {
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), cam);
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      const intersection = new THREE.Vector3();
+      if (raycaster.ray.intersectPlane(plane, intersection)) {
+        x = intersection.x;
+        y = -intersection.z;
+      }
+    } else {
+      x = ((e.clientX - rect.left) / rect.width) * 6 - 3;
+      y = ((e.clientY - rect.top) / rect.height) * -4 + 2;
+    }
     setDroppedItems((prev) => {
       const updated = [...prev, { type, x, y, rotation_deg: 0 }];
       onItemsChange?.(updated);
@@ -564,6 +586,7 @@ export default function PCBWorkspace({
         gl={{ preserveDrawingBuffer: true }}
         onCreated={({ gl }) => { _activeCanvas = gl.domElement; }}
       >
+	<CameraGrabber targetRef={cameraRef} />
         <ambientLight intensity={0.5} />
         <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow />
         <directionalLight position={[-3, 4, -2]} intensity={0.3} />

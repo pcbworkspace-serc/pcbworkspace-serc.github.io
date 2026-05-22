@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 
 interface CristalProps {
   crystalCount: number;
@@ -42,7 +42,7 @@ export default function Cristal({ crystalCount }: CristalProps) {
       <style>{`
         @keyframes cristal-walk {
           0%   { transform: translate(0, 0); }
-          100% { transform: translate(1500px, 90px); }
+          100% { transform: translate(1500px, -300px); }
         }
       `}</style>
     </div>

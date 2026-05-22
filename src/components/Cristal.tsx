@@ -20,7 +20,7 @@ export default function Cristal({ crystalCount }: CristalProps) {
     <div
       style={{
         position: "absolute",
-        bottom: 12,
+        bottom: 60,
         left: "-180px",
         width: 160,
         height: 100,
@@ -41,8 +41,8 @@ export default function Cristal({ crystalCount }: CristalProps) {
       />
       <style>{`
         @keyframes cristal-walk {
-          0%   { transform: translateX(0); }
-          100% { transform: translateX(1500px); }
+          0%   { transform: translate(0, 0); }
+          100% { transform: translate(1500px, 90px); }
         }
       `}</style>
     </div>

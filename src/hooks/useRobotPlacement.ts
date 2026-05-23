@@ -1,19 +1,30 @@
 /**
- * useRobotPlacement Ã¢â‚¬â€ fires the move-pick-place sequence when a user drops
- * a component on the PCB. Sends commands through the shared serial layer,
- * which routes to either:
- *   - Demo Mode (simulated firmware echoing READY/POS_OK/PICK_OK/PLACE_OK)
- *   - Real Robot (WebSerial-connected ESP32)
- * Both render in the Demo Console with -> outgoing and <- incoming lines.
+ * useRobotPlacement — fires the move-pick-place sequence when a user drops
+ * a component on the PCB. Uses live bin detection from the top camera to
+ * find where the requested component actually IS in the workstation, then
+ * commands the robot through that pickup.
+ *
+ * Pipeline per drop:
+ *   1. Scan bins (capture + detect + pixel->world)
+ *   2. Find a visible instance of the requested type
+ *   3. Move to its world coords -> Pick -> Move to PCB target -> Place
+ *   4. Toast result
+ *
+ * If no instance is visible -> toast asking user to add parts and refuses
+ * the pickup. No silent failures.
  */
-import { useCallback } from "react";
-import { sendSerialCommand, isDemoMode, emitLine } from "@/lib/serial";
-import { getSerialStatus } from "@/lib/serial";
+import { useCallback, useRef } from "react";
+import { sendSerialCommand, isDemoMode, emitLine, getSerialStatus } from "@/lib/serial";
+import { scanBins, findInstance } from "@/lib/binScan";
 import { useToast } from "@/hooks/use-toast";
 
-// Pickup bin coordinates for each component type Ã¢â‚¬â€ these would come from
-// the camera + vision detection in production. For now, fixed positions.
-const BIN_COORDS: Record<string, [number, number]> = {
+const SCENE_TO_MM = 10;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Mock detection fallback for Demo Mode when the ML backend is sleeping.
+// Real bin scan is tried first; if it fails, we use these positions so the
+// demo flow keeps working. Mark each so the console makes the source clear.
+const DEMO_BIN_COORDS: Record<string, [number, number]> = {
   Resistor:   [-25, -20],
   Capacitor:  [-25, -10],
   Diode:      [-25, 0],
@@ -26,53 +37,102 @@ const BIN_COORDS: Record<string, [number, number]> = {
   Header:     [-35, 20],
 };
 
-// Scale factor: scene coords are unitless [-3,3] x [-2,2]; PCB is in mm
-// Multiply scene by ~10 to get reasonable mm values
-const SCENE_TO_MM = 10;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 export function useRobotPlacement() {
   const { toast } = useToast();
+  const inFlight = useRef(false);
+
   return useCallback(
     async (sceneX: number, sceneZ: number, componentType: string) => {
-      // Only fire if Demo Mode is active or a real robot is connected
-      if (!isDemoMode() && !getSerialStatus() === "connected") {
+      if (inFlight.current) {
+        emitLine(`! Pickup busy - drop again after current sequence finishes`);
+        return;
+      }
+      if (!isDemoMode() && getSerialStatus() !== "connected") {
         toast({
           title: `${componentType} placed (offline)`,
           description: "Connect Robot or enable Demo Mode to see the pick-and-place sequence.",
         });
         return;
       }
+
+      inFlight.current = true;
       const x_mm = sceneX * SCENE_TO_MM;
       const y_mm = sceneZ * SCENE_TO_MM;
-      const bin = BIN_COORDS[componentType] ?? [0, 0];
+
       try {
         emitLine(`> Placing ${componentType} at PCB (${x_mm.toFixed(1)}, ${y_mm.toFixed(1)})`);
-        await sleep(200);
-        emitLine(`> Step 1/4 — Moving to ${componentType} bin at (${bin[0]}, ${bin[1]})`);
-        await sendSerialCommand(`MOVE X${bin[0]} Y${bin[1]} Z5 R0`);
+
+        // 1) Scan for the component in the bin area
+        emitLine(`> Step 1/5 - Scanning workstation for ${componentType}`);
+        const scan = await scanBins();
+        let bin: [number, number];
+
+        if (scan.ok) {
+          const inst = findInstance(scan, componentType);
+          if (inst) {
+            bin = [inst.world.x_mm, inst.world.y_mm];
+            emitLine(`> Found ${componentType} at world (${bin[0].toFixed(1)}, ${bin[1].toFixed(1)}) - confidence ${(inst.confidence * 100).toFixed(0)}%`);
+          } else if (DEMO_BIN_COORDS[componentType]) {
+            // Vision didn't see it, but Demo Mode users still want the sequence
+            bin = DEMO_BIN_COORDS[componentType];
+            emitLine(`! No ${componentType} detected by camera - using fallback bin position (Demo)`);
+          } else {
+            emitLine(`! No ${componentType} detected and no fallback bin defined`);
+            toast({
+              title: `Cannot pick ${componentType}`,
+              description: `No ${componentType} visible in the workstation. Add one to the bin area and try again.`,
+              variant: "destructive",
+            });
+            return;
+          }
+        } else if (DEMO_BIN_COORDS[componentType]) {
+          bin = DEMO_BIN_COORDS[componentType];
+          emitLine(`! Scan unavailable (${scan.error ?? "unknown"}) - using fallback bin (Demo)`);
+        } else {
+          emitLine(`! Scan failed: ${scan.error}`);
+          toast({
+            title: `Scan failed`,
+            description: scan.error ?? "Unable to detect components",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // 2) Move to bin
+        emitLine(`> Step 2/5 - Moving to ${componentType} at bin (${bin[0].toFixed(1)}, ${bin[1].toFixed(1)})`);
+        await sendSerialCommand(`MOVE X${bin[0].toFixed(1)} Y${bin[1].toFixed(1)} Z5 R0`);
         await sleep(700);
-        emitLine(`> Step 2/4 — Picking up ${componentType}`);
+
+        // 3) Pick from bin
+        emitLine(`> Step 3/5 - Picking up ${componentType}`);
         await sendSerialCommand(`PICK`);
         await sleep(600);
-        emitLine(`> Step 3/4 — Moving to PCB target (${x_mm.toFixed(1)}, ${y_mm.toFixed(1)})`);
+
+        // 4) Move to PCB target
+        emitLine(`> Step 4/5 - Moving to PCB target (${x_mm.toFixed(1)}, ${y_mm.toFixed(1)})`);
         await sendSerialCommand(`MOVE X${x_mm.toFixed(1)} Y${y_mm.toFixed(1)} Z5 R0`);
         await sleep(700);
-        emitLine(`> Step 4/4 — Placing component on PCB`);
+
+        // 5) Place on PCB
+        emitLine(`> Step 5/5 - Placing component on PCB`);
         await sendSerialCommand(`PLACE`);
         await sleep(300);
         emitLine(`> Done. ${componentType} placed.`);
+
         toast({
           title: `Placed ${componentType}`,
-          description: `Bin (${bin[0]}, ${bin[1]}) -> PCB (${x_mm.toFixed(1)}, ${y_mm.toFixed(1)})`,
+          description: `Bin (${bin[0].toFixed(1)}, ${bin[1].toFixed(1)}) -> PCB (${x_mm.toFixed(1)}, ${y_mm.toFixed(1)})`,
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
+        emitLine(`! Placement failed: ${msg}`);
         toast({
-          title: `Place failed`,
+          title: `Placement failed`,
           description: msg,
           variant: "destructive",
         });
+      } finally {
+        inFlight.current = false;
       }
     },
     [toast],

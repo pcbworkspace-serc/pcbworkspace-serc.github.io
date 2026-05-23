@@ -1,5 +1,5 @@
 /**
- * robotLog — tiny pub/sub bus so any part of the app can push activity into
+ * robotLog Ã¢â‚¬â€ tiny pub/sub bus so any part of the app can push activity into
  * the bottom-left Robot panel's chat log without prop-drilling.
  *
  * Usage:
@@ -24,6 +24,6 @@ export const robotLog = {
   },
   subscribe(fn: Listener): () => void {
     listeners.add(fn);
-    return () => listeners.delete(fn);
+    return () => { listeners.delete(fn); };
   },
 };

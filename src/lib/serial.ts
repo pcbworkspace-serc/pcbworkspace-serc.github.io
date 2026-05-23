@@ -2,8 +2,8 @@
 //
 // Demo Mode: when enabled, the app pretends a robot is connected and
 // generates realistic responses (POS_OK, PICK_OK, PLACE_OK, etc.) in the
-// background. Lets you demo the full pipeline — chat, VLA planning,
-// teach mode, telemetry — without any hardware plugged in.
+// background. Lets you demo the full pipeline â€” chat, VLA planning,
+// teach mode, telemetry â€” without any hardware plugged in.
 //
 // Real mode: requires Chromium browser + WebSerial + actual USB device.
 
@@ -26,7 +26,7 @@ function setStatus(s: SerialStatus) {
   statusSubscribers.forEach((fn) => { try { fn(s); } catch {} });
 }
 
-function emitLine(line: string) {
+export function emitLine(line: string) {
   lineSubscribers.forEach((fn) => { try { fn(line); } catch {} });
 }
 
@@ -47,7 +47,7 @@ export function isWebSerialSupported(): boolean {
   return typeof navigator !== "undefined" && "serial" in (navigator as any);
 }
 
-// ─── Demo Mode ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ Demo Mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function isDemoMode(): boolean { return demoMode; }
 
 export function enableDemoMode(): void {
@@ -113,7 +113,7 @@ async function simulateCommand(line: string): Promise<void> {
     return;
   }
 
-  // PICK — random part weight between 0.1 and 0.4 g
+  // PICK â€” random part weight between 0.1 and 0.4 g
   if (verb === "PICK") {
     await sleep(150);
     emitLine("VAC -78.3 kpa");
@@ -145,11 +145,11 @@ async function simulateCommand(line: string): Promise<void> {
   emitLine(`ERR unknown_command_${verb.toLowerCase()}`);
 }
 
-// ─── Real WebSerial connection ───────────────────────────────────────────────
+// â”€â”€â”€ Real WebSerial connection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function connectRobot(): Promise<void> {
   if (demoMode) return;  // Demo Mode already "connected"
   if (!isWebSerialSupported()) {
-    throw new Error("WebSerial not supported. Use Chrome, Edge, or another Chromium browser — or click Demo Mode to try the app without hardware.");
+    throw new Error("WebSerial not supported. Use Chrome, Edge, or another Chromium browser â€” or click Demo Mode to try the app without hardware.");
   }
   if (port) return;
   setStatus("connecting");

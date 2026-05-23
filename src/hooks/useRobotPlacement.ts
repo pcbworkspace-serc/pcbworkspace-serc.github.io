@@ -1,5 +1,5 @@
 /**
- * useRobotPlacement â€” fires the move-pick-place sequence when a user drops
+ * useRobotPlacement Ã¢â‚¬â€ fires the move-pick-place sequence when a user drops
  * a component on the PCB. Sends commands through the shared serial layer,
  * which routes to either:
  *   - Demo Mode (simulated firmware echoing READY/POS_OK/PICK_OK/PLACE_OK)
@@ -7,11 +7,11 @@
  * Both render in the Demo Console with -> outgoing and <- incoming lines.
  */
 import { useCallback } from "react";
-import { sendSerialCommand, isDemoMode } from "@/lib/serial";
+import { sendSerialCommand, isDemoMode, emitLine } from "@/lib/serial";
 import { getSerialStatus } from "@/lib/serial";
 import { useToast } from "@/hooks/use-toast";
 
-// Pickup bin coordinates for each component type â€” these would come from
+// Pickup bin coordinates for each component type Ã¢â‚¬â€ these would come from
 // the camera + vision detection in production. For now, fixed positions.
 const BIN_COORDS: Record<string, [number, number]> = {
   Resistor:   [-25, -20],
@@ -47,17 +47,21 @@ export function useRobotPlacement() {
       const y_mm = sceneZ * SCENE_TO_MM;
       const bin = BIN_COORDS[componentType] ?? [0, 0];
       try {
-        // 1) Move to bin
+        emitLine(`> Placing ${componentType} at PCB (${x_mm.toFixed(1)}, ${y_mm.toFixed(1)})`);
+        await sleep(200);
+        emitLine(`> Step 1/4 — Moving to ${componentType} bin at (${bin[0]}, ${bin[1]})`);
         await sendSerialCommand(`MOVE X${bin[0]} Y${bin[1]} Z5 R0`);
         await sleep(700);
-        // 2) Pick from bin
+        emitLine(`> Step 2/4 — Picking up ${componentType}`);
         await sendSerialCommand(`PICK`);
         await sleep(600);
-        // 3) Move to PCB target
+        emitLine(`> Step 3/4 — Moving to PCB target (${x_mm.toFixed(1)}, ${y_mm.toFixed(1)})`);
         await sendSerialCommand(`MOVE X${x_mm.toFixed(1)} Y${y_mm.toFixed(1)} Z5 R0`);
         await sleep(700);
-        // 4) Place on PCB
+        emitLine(`> Step 4/4 — Placing component on PCB`);
         await sendSerialCommand(`PLACE`);
+        await sleep(300);
+        emitLine(`> Done. ${componentType} placed.`);
         toast({
           title: `Placed ${componentType}`,
           description: `Bin (${bin[0]}, ${bin[1]}) -> PCB (${x_mm.toFixed(1)}, ${y_mm.toFixed(1)})`,

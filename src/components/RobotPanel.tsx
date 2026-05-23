@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Robot control panel â€” sits in the left blue sidebar below Inventory.
  * Styled to match the existing JEPA Vision / Inventory cards
  * (bg-black/20 rounded-xl, black-text headers, similar typography).
@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRobotStatus } from "@/hooks/useRobotStatus";
 import { robotClient, type ChatExecEntry } from "@/lib/robotClient";
+import { robotLog } from "@/lib/robotLog";
 
 type LogEntry =
   | { kind: "user"; text: string }
@@ -37,6 +38,9 @@ export default function RobotPanel() {
   }, [log]);
 
   const append = useCallback((e: LogEntry) => setLog((p) => [...p, e]), []);
+  useEffect(() => robotLog.subscribe(({ kind, text }) => {
+    append({ kind: kind === "user" ? "user" : kind === "error" ? "error" : "info", text });
+  }), [append]);
 
   const sendChat = useCallback(async () => {
     const text = input.trim();

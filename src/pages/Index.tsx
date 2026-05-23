@@ -1,4 +1,4 @@
-﻿import PCBWorkspace from "@/components/PCBWorkspace";
+import PCBWorkspace from "@/components/PCBWorkspace";
 import Inventory from "@/components/Inventory";
 import CameraFeed from "@/components/CameraFeed";
 import RobotPanel from "@/components/RobotPanel";

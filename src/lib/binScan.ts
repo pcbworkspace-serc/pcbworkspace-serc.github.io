@@ -1,5 +1,5 @@
 /**
- * binScan — capture a frame from the top camera, run detection, and convert
+ * binScan â€” capture a frame from the top camera, run detection, and convert
  * pixel-space bounding boxes to world-mm coordinates.
  *
  * Returns a map keyed by component type with a list of world positions where
@@ -76,12 +76,14 @@ export async function scanBins(): Promise<BinScanResult> {
     }
     const data = (await res.json()) as DetectResponse;
     const rawBoxes = data.boxes ?? data.detections ?? [];
-    const instances: DetectedInstance[] = rawBoxes.map((b) => ({
-      type: b.class_name,
-      confidence: b.confidence,
-      bbox: b.bbox,
-      world: bboxCenterToWorld(b.bbox, size.width, size.height),
-    }));
+    const instances: DetectedInstance[] = await Promise.all(
+      rawBoxes.map(async (b) => ({
+        type: b.class_name,
+        confidence: b.confidence,
+        bbox: b.bbox,
+        world: await bboxCenterToWorld(b.bbox, size.width, size.height),
+      })),
+    );
     return { ok: true, instances, imageSize: size, capturedAt };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

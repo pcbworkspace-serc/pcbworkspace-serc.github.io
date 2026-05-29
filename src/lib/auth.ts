@@ -34,6 +34,31 @@ export type AuthResult =
   | { ok: true; mode: "login"; email: string }
   | { ok: false; error: string };
 
+// ─── Pre-approved colleagues ───────────────────────────────────────────────
+// These users can log in directly without needing an access code.
+interface StoredUser {
+  email: string;
+  password: string;
+}
+
+const PRE_APPROVED_USERS: StoredUser[] = [
+  { email: "ramallis@grinnell.edu", password: "sercdevelopers" },
+  { email: "jsantosuosso@vt.edu", password: "sercdevelopers" },
+  { email: "krishna32123@vt.edu", password: "sercdevelopers" },
+  { email: "bww25@vt.edu", password: "sercdevelopers" },
+  { email: "njijun24@vt.edu", password: "sercdevelopers" },
+  { email: "hassan65@purdue.edu", password: "sercdevelopers" },
+  { email: "okinealb@grinnell.edu", password: "sercdevelopers" },
+  { email: "youssefchebil@vt.edu", password: "sercdevelopers" },
+  { email: "liuhongf@grinnell.edu", password: "sercdevelopers" },
+  { email: "gunjansiddharth03@gmail.com", password: "sercdevelopers" },
+  { email: "arhanghosh30@gmail.com", password: "sercdevelopers" },
+  { email: "moksh191@tamu.edu", password: "sercdevelopers" },
+  { email: "k.orosheva1@gmail.com", password: "sercdevelopers" },
+  { email: "dmisi98@gmail.com", password: "sercdevelopers" },
+];
+// ──────────────────────────────────────────────────────────────────────────
+
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
@@ -71,10 +96,13 @@ function migrateLegacyData(email: string) {
   }
 }
 
-export async function authenticate(
-  emailInput: string,
-  password: string,
-): Promise<AuthResult> {
+function isPreApprovedUser(email: string): StoredUser | undefined {
+  return PRE_APPROVED_USERS.find(
+    (u) => normalizeEmail(u.email) === email,
+  );
+}
+
+export async function authenticate(emailInput: string, password: string, accessCodeInput?: string): Promise<AuthResult> {
   const email = normalizeEmail(emailInput);
 
   if (!email || !email.includes("@")) {

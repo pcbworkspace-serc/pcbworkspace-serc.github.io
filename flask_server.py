@@ -1,4 +1,4 @@
-﻿"""
+"""
 Flask Server for SERC Robotic Arm Control
 Production backend with G-code interface to ESP32
 """
@@ -52,8 +52,11 @@ def health():
         "vision_available": True
     })
 
-@app.route("/robot/place", methods=["POST"])
+@app.route("/robot/place", methods=["POST", "OPTIONS"])
 def robot_place():
+    if request.method == "OPTIONS":
+        return "", 200
+    
     data = request.get_json() or {}
     component = data.get("component_type", "Unknown")
     target_x = data.get("target_x_mm", 0)
@@ -61,12 +64,17 @@ def robot_place():
     
     cmd_id = "cmd_12345"
     
+    # Allow demo mode - just log and return success
     if not arm.connected:
+        print(f"[DEMO] Placement: {component} at ({target_x}, {target_y})")
         return jsonify({
-            "accepted": False,
+            "accepted": True,
             "command_id": cmd_id,
-            "errors": ["Arm not connected"]
-        }), 503
+            "component_type": component,
+            "target_x": target_x,
+            "target_y": target_y,
+            "errors": []
+        })
     
     try:
         # Move to bin

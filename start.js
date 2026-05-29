@@ -1,5 +1,8 @@
-﻿const { spawn } = require('child_process');
-const path = require('path');
+﻿import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 console.log('🚀 Starting SERC PCB Workspace...\n');
 

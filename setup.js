@@ -1,6 +1,6 @@
-﻿const fs = require('fs');
-const { execSync } = require('child_process');
-const readline = require('readline');
+﻿import fs from 'fs';
+import { execSync } from 'child_process';
+import readline from 'readline';
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -9,7 +9,6 @@ const rl = readline.createInterface({
 
 console.log('\n🔧 SERC Setup Wizard\n');
 
-// Check Python
 try {
   execSync('python --version', { stdio: 'ignore' });
   console.log('✓ Python installed');
@@ -18,7 +17,6 @@ try {
   process.exit(1);
 }
 
-// Install dependencies
 console.log('📦 Installing Python dependencies...');
 try {
   execSync('pip install flask flask-cors pyserial opencv-python torch', { stdio: 'inherit' });
@@ -28,11 +26,9 @@ try {
   process.exit(1);
 }
 
-// Ask for COM port
 rl.question('What COM port is your ESP32 on? (default: COM3): ', (port) => {
   port = port || 'COM3';
   
-  // Update flask_server.py
   let flask = fs.readFileSync('flask_server.py', 'utf8');
   flask = flask.replace(/ESP32_PORT = ".*?"/, ESP32_PORT = "");
   fs.writeFileSync('flask_server.py', flask);

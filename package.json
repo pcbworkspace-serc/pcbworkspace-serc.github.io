@@ -11,8 +11,8 @@
                     "preview":  "vite preview",
                     "test":  "vitest run",
                     "test:watch":  "vitest",
-                    "pages":  "npm run build"
-                    "dev:vite": "vite",
+                    "pages":  "npm run build",
+                    "dev:vite": "vite"
                 },
     "dependencies":  {
                          "@hookform/resolvers":  "^3.10.0",

@@ -1,8 +1,5 @@
 ﻿/**
  * Robot Command Client - Flask Backend Version
- *
- * This replaces the old lib/robot.ts that sent commands directly via serial.
- * Now all commands go through the Flask server running on localhost:5000.
  */
 
 const FLASK_BASE = "http://127.0.0.1:5000";
@@ -23,13 +20,13 @@ export interface PlaceResult {
 }
 
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(${FLASK_BASE}${path}, {
+  const res = await fetch(`${FLASK_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   
-  if (!res.ok) throw new Error(${path} -> HTTP ${res.status});
+  if (!res.ok) throw new Error(`${path} -> HTTP ${res.status}`);
   return (await res.json()) as T;
 }
 
@@ -50,7 +47,7 @@ export async function commandPlace(target: PlaceTarget): Promise<PlaceResult> {
       const errorMsg = resp.errors?.join("; ") || "Robot rejected placement";
       return {
         status: "rejected",
-        message: Placement rejected: ${errorMsg},
+        message: `Placement rejected: ${errorMsg}`,
         commandId: resp.command_id,
         errors: resp.errors,
       };
@@ -58,14 +55,14 @@ export async function commandPlace(target: PlaceTarget): Promise<PlaceResult> {
 
     return {
       status: "placed",
-      message: ✓ Placed ${target.type} at (${targetXMm.toFixed(1)}, ${targetYMm.toFixed(1)}) mm,
+      message: `✓ Placed ${target.type} at (${targetXMm.toFixed(1)}, ${targetYMm.toFixed(1)}) mm`,
       commandId: resp.command_id,
     };
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     return {
       status: "queued_offline",
-      message: Flask server unreachable: ${errMsg}. Queued locally.,
+      message: `Flask server unreachable: ${errMsg}. Queued locally.`,
     };
   }
 }

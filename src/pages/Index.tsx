@@ -78,6 +78,8 @@ const Index = () => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [mlToolsOpen, setMlToolsOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"pcb" | "sch">("pcb");
+  // Ghost previews on the Three.js board during plan confirmation
+  const [planPreviewItems, setPlanPreviewItems] = useState<{ type: string; x: number; y: number; rotation_deg: number }[] | null>(null);
   const [unit, setUnit] = useState<"mm" | "in" | "mil">("mm");
   const [collapsed, setCollapsed] = useState(false);
 
@@ -398,6 +400,7 @@ const Index = () => {
                 pendingPin={pendingPin}
                 onPinClick={handlePinClick}
                 selectedIndex={selectedIndex}
+                previewItems={planPreviewItems ?? undefined}
               />
 
               <div className="absolute top-3 right-3 z-30 flex gap-0.5 bg-black/80 border border-primary/30 rounded-lg p-1 shadow-2xl backdrop-blur-sm">
@@ -454,7 +457,7 @@ const Index = () => {
       </div>
 
       <div className="w-[280px] shrink-0 flex flex-col pt-10 border-l border-primary/20" style={{backgroundColor:"hsla(220,70%,8%,0.97)"}}>
-        <PCBRobot boardItems={mapItems} />
+        <PCBRobot boardItems={mapItems} onPendingPlanChange={setPlanPreviewItems} />
       </div>
 
       {detectOpen && (

@@ -76,13 +76,126 @@ function RenderMsg({ content }: { content: string }) {
 
 interface PCBRobotProps {
  boardItems?: BoardStateItem[];
+ // Called whenever a plan is staged for confirmation (null = cleared)
+ onPendingPlanChange?: (items: { type: string; x: number; y: number; rotation_deg: number }[] | null) => void;
 }
 
-export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
+
+function extractComponentType(instruction: string): string {
+  const l = instruction.toLowerCase();
+  if (l.includes("resistor"))   return "Resistor";
+  if (l.includes("capacitor"))  return "Capacitor";
+  if (l.includes("led"))        return "LED";
+  if (l.includes("diode"))      return "Diode";
+  if (l.includes("transistor")) return "Transistor";
+  if (l.includes(" ic ") || l.includes("chip")) return "IC";
+  if (l.includes("inductor"))   return "Inductor";
+  if (l.includes("crystal"))    return "Crystal";
+  if (l.includes("switch"))     return "Switch";
+  if (l.includes("header"))     return "Header";
+  return "Resistor";
+}
+
+
+// ── Arm-path diagram rendered during plan confirmation ────────────────────────
+function PlanDiagram({ actions }: { actions: VLAAction[] }) {
+  const W = 224, H = 128, PAD = 16;
+  const bW = W - PAD * 2, bH = H - PAD * 2;
+
+  // PCB mm -> SVG px  (flip Y so board top = SVG top)
+  const pt = (xm: number, ym: number) => ({
+    svgX: PAD + (xm / 62) * bW,
+    svgY: H - PAD - (ym / 42) * bH,
+  });
+
+  // Build ordered waypoints from actions
+  type WP = { svgX: number; svgY: number; kind: "home" | "transit" | "target" };
+  const wps: WP[] = [{ ...pt(0, 0), kind: "home" }];
+  for (const a of actions) {
+    if (a.action === "move") {
+      const m = a as VLAAction & { x_mm: number; y_mm: number; z_mm: number };
+      wps.push({ ...pt(m.x_mm, m.y_mm), kind: m.z_mm <= 1 ? "target" : "transit" });
+    }
+  }
+
+  const colDot  = (k: string) => k === "home" ? "#f59e0b" : k === "target" ? "#10b981" : "#00d4ff";
+  const colLine = (k: string) => k === "target" ? "#10b981" : "#00d4ff";
+  const dash    = (k: string) => k === "transit" ? "5 3" : "none";
+
+  return (
+    <svg width={W} height={H} style={{ display:"block", margin:"6px 0", borderRadius:6, background:"#060e1a" }}>
+      <defs>
+        <marker id="ac" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+          <path d="M0,1 L6,3.5 L0,6" fill="none" stroke="#00d4ff" strokeWidth="1.2"/>
+        </marker>
+        <marker id="ag" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+          <path d="M0,1 L6,3.5 L0,6" fill="none" stroke="#10b981" strokeWidth="1.2"/>
+        </marker>
+      </defs>
+
+      {/* PCB board */}
+      <rect x={PAD} y={PAD} width={bW} height={bH} fill="#0c3d1e" stroke="#1a7a3a" strokeWidth={1} rx={2}/>
+
+      {/* Faint grid */}
+      {[10,20,30,40,50].map(x => (
+        <line key={"gx"+x}
+          x1={PAD+(x/62)*bW} y1={PAD} x2={PAD+(x/62)*bW} y2={H-PAD}
+          stroke="#1a7a3a" strokeWidth={0.3}/>
+      ))}
+      {[10,20,30].map(y => (
+        <line key={"gy"+y}
+          x1={PAD} y1={H-PAD-(y/42)*bH} x2={W-PAD} y2={H-PAD-(y/42)*bH}
+          stroke="#1a7a3a" strokeWidth={0.3}/>
+      ))}
+
+      {/* Path segments */}
+      {wps.slice(1).map((wp, i) => {
+        const from = wps[i];
+        const color = colLine(wp.kind);
+        const mid = wp.kind === "target" ? "ag" : "ac";
+        return (
+          <line key={"seg"+i}
+            x1={from.svgX} y1={from.svgY} x2={wp.svgX} y2={wp.svgY}
+            stroke={color} strokeWidth={1.5}
+            strokeDasharray={dash(wp.kind)}
+            markerEnd={`url(#${mid})`}
+          />
+        );
+      })}
+
+      {/* Waypoint dots */}
+      {wps.map((wp, i) => (
+        <circle key={"dot"+i}
+          cx={wp.svgX} cy={wp.svgY} r={i === 0 ? 5 : 3.5}
+          fill={colDot(wp.kind)} stroke="#000" strokeWidth={0.5}/>
+      ))}
+
+      {/* Labels */}
+      <text x={wps[0].svgX+7} y={wps[0].svgY+4}
+        fill="#f59e0b" fontSize={8} fontFamily="monospace">HOME</text>
+      {wps.length > 1 && (
+        <text x={wps[wps.length-1].svgX+7} y={wps[wps.length-1].svgY+4}
+          fill="#10b981" fontSize={8} fontFamily="monospace">
+          {wps[wps.length-1].kind === "target" ? "PLACE" : "TARGET"}
+        </text>
+      )}
+
+      {/* Legend */}
+      <line x1={PAD} y1={H-4} x2={PAD+14} y2={H-4} stroke="#00d4ff" strokeWidth={1.5} strokeDasharray="5 3"/>
+      <text x={PAD+17} y={H-1} fill="#00d4ff" fontSize={7} fontFamily="monospace">transit</text>
+      <line x1={PAD+58} y1={H-4} x2={PAD+72} y2={H-4} stroke="#10b981" strokeWidth={1.5}/>
+      <text x={PAD+75} y={H-1} fill="#10b981" fontSize={7} fontFamily="monospace">place</text>
+    </svg>
+  );
+}
+
+export default function PCBRobot({ boardItems = [], onPendingPlanChange }: PCBRobotProps) {
  const [visible, setVisible] = useState(true);
  const [vlaMode, setVlaMode] = useState(false);
  const [planLibraryOpen, setPlanLibraryOpen] = useState(false);
  const [lastPlan, setLastPlan] = useState<{ instruction: string; actions: VLAAction[] } | null>(null);
+ // Confirmation gate: holds a staged plan until user confirms or cancels
+ const [pendingPlan, setPendingPlan] = useState<{ instruction: string; actions: VLAAction[]; summary: string } | null>(null);
  const [messages, setMessages] = useState<Message[]>([{
  role: "assistant",
  content: "Hi! I am Layla, your PCB design assistant. Click any **Try:** pill below to drive the robot, toggle **VLA: ON** for natural language, or just ask me an electronics question."
@@ -94,6 +207,20 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
  const bottomRef = useRef<HTMLDivElement>(null);
 
  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+ // Tell the parent which positions to preview on the Three.js board
+ useEffect(() => {
+ if (!onPendingPlanChange) return;
+ if (!pendingPlan) { onPendingPlanChange(null); return; }
+ const previewItems = pendingPlan.actions
+ .filter(a => a.action === "move")
+ .map(a => {
+ const m = a as VLAAction & { x_mm: number; y_mm: number };
+ // Three.js board uses the same x/y units as the VLA actions (mm → world units match)
+ return { type: extractComponentType(pendingPlan.instruction), x: (m.x_mm - 31) / 10, y: (m.y_mm - 21) / 10, rotation_deg: 0 };
+ });
+ onPendingPlanChange(previewItems.length > 0 ? previewItems : null);
+ }, [pendingPlan, onPendingPlanChange]);
 
  const appendAssistant = (content: string) =>
  setMessages(prev => [...prev, { role: "assistant", content }]);
@@ -137,29 +264,36 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
  }
  appendAssistant(summary);
 
- // Remember this plan so the user can save it later
+ // Stage the plan — user must confirm before the robot moves
  setLastPlan({ instruction, actions: plan.actions });
+ setPendingPlan({ instruction, actions: plan.actions, summary });
+ return true;
+ };
+
+ /** Called when user clicks Confirm on the pending plan. Runs executePlan. */
+ const confirmPlan = async () => {
+ if (!pendingPlan) return;
+ const { instruction, actions } = pendingPlan;
+ setPendingPlan(null);
 
  if (getSerialStatus() !== "connected") {
- appendAssistant("Robot isn't connected, so I can show the plan but can't execute it.\n\nClick the **Connect Robot** badge in the top bar pick ** Demo Mode** to simulate it, or **Real Robot** to drive your ESP32.");
- return true;
+ appendAssistant("Robot isn't connected, so I can show the plan but can't execute it.\n\nClick the **Connect Robot** badge in the top bar — pick **Demo Mode** to simulate it, or **Real Robot** to drive your ESP32.");
+ setBusy(false);
+ return;
  }
 
+ setBusy(true);
  setExecuting(true);
  abortRef.current = new AbortController();
- await executePlan(plan.actions, {
+ await executePlan(actions, {
  abortSignal: abortRef.current.signal,
  waitForOk: true,
  stepTimeoutMs: 8000,
- // Sprint 8/9: camera feedback loop on critical actions, with per-action camera routing
  observeAfter: ["pick", "place", "release"],
  getFrameForAction: async (a) => {
- // After PICK bottom camera sees the part held on the nozzle
- // After PLACE / RELEASE top camera sees the part on the PCB
  const role = a.action === "pick" ? "bottom" : "top";
  const frame = await captureFrameByRole(role);
  if (frame) return frame;
- // Fallback to whatever the live CameraFeed has if dual-camera setup isn't ready
  try { return await grabCameraFrame(); } catch { return null; }
  },
  maxRetries: 1,
@@ -191,8 +325,10 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
  },
  });
  setExecuting(false);
+ setBusy(false);
  abortRef.current = null;
- return true;
+ // surfaced instruction for later save
+ void instruction;
  };
 
  /** Save the most recently generated VLA plan as a named template. */
@@ -396,6 +532,31 @@ export default function PCBRobot({ boardItems = [] }: PCBRobotProps) {
  )}
  <div ref={bottomRef}/>
  </div>
+ {/* ── Confirmation gate: shown after Layla plans, before robot moves ── */}
+ {pendingPlan && !executing && (
+ <div className="px-3 py-2.5 bg-amber-900/30 border-t border-amber-400/40 shrink-0">
+ <p className="text-[10px] font-bold text-amber-300 mb-1.5">
+ ⚠ Ready to execute {pendingPlan.actions.length} step{pendingPlan.actions.length === 1 ? "" : "s"} — confirm?
+ </p>
+        <PlanDiagram actions={pendingPlan.actions} />
+ <div className="flex gap-2">
+ <button
+ type="button"
+ onClick={confirmPlan}
+ className="flex-1 text-[10px] font-bold py-1 rounded border bg-emerald-500/20 text-emerald-300 border-emerald-400/50 hover:bg-emerald-500/35 transition-colors"
+ >
+ ✅ Confirm — run robot
+ </button>
+ <button
+ type="button"
+ onClick={() => { setPendingPlan(null); appendAssistant("Plan cancelled. The robot will not move."); setBusy(false); }}
+ className="flex-1 text-[10px] font-bold py-1 rounded border bg-red-500/15 text-red-300 border-red-400/40 hover:bg-red-500/30 transition-colors"
+ >
+ ❌ Cancel
+ </button>
+ </div>
+ </div>
+ )}
  {executing && (
  <div className="px-3 py-2 bg-purple-900/40 border-t border-purple-400/30 flex items-center justify-between shrink-0">
  <span className="text-[10px] font-bold text-purple-200"> Executing plan</span>

@@ -1,7 +1,4 @@
-# make_agent.py — generates flask_server_local.py (serial-only agent)
-# Does NOT modify your existing flask_server.py.
-
-AGENT = r'''"""
+"""
 SERC Local Agent — serial/robot control only.
 Runs on the customer's machine next to the USB-connected robot.
 Contains NO Anthropic key and NO Claude routes (those stay on the hosted server).
@@ -84,9 +81,3 @@ if __name__ == "__main__":
     print("SERC Local Agent  —  http://127.0.0.1:5000")
     print(f"ESP32 Port: {ESP32_PORT}")
     app.run(host="127.0.0.1", port=5000, debug=False)
-'''
-
-with open("flask_server_local.py", "w", encoding="utf-8") as f:
-    f.write(AGENT)
-
-print("Wrote flask_server_local.py")

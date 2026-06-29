@@ -445,26 +445,24 @@ export default function PCBRobot({ boardItems = [], onPendingPlanChange }: PCBRo
  // else fall through to KB
  }
 
- // 3) KB lookup
- const kb = findAnswer(text);
- if (kb) {
- await new Promise(r => setTimeout(r, 350));
- appendAssistant(kb);
- setBusy(false); return;
- }
-
- // 4) Fallback to local Flask chat server, if running
- try {
- const res = await fetch("http://127.0.0.1:5000/chat", {
- method: "POST", headers: { "Content-Type": "application/json" },
- body: JSON.stringify({ message: text }), signal: AbortSignal.timeout(4000),
- });
- if (res.ok) {
- const d = await res.json() as { reply?: string };
- appendAssistant(d.reply ?? "No response.");
- setBusy(false); return;
- }
- } catch {}
+ // 3) Claude-powered backend chat (primary conversational path)
+    const NN_BASE = (import.meta.env.VITE_NN_URL as string | undefined) ?? "http://127.0.0.1:5000";
+    try {
+      const res = await fetch(`${NN_BASE}/chat`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }), signal: AbortSignal.timeout(60000),
+      });
+      if (res.ok) {
+        const d = await res.json() as { reply?: string };
+        if (d.reply) { appendAssistant(d.reply); setBusy(false); return; }
+      }
+    } catch {}
+    // 4) Offline fallback: keyword KB if backend unreachable
+    const kb = findAnswer(text);
+    if (kb) {
+      appendAssistant(kb);
+      setBusy(false); return;
+    }
 
  // 5) Generic miss
  appendAssistant(`That one is outside my current knowledge base. Try toggling **VLA Mode** above if you want me to interpret freeform instructions or ask me about resistors, capacitors, transistors, PCB design, protocols, or how to drive the robot (\`home\`, \`move 10 20\`, \`pick\`).`);

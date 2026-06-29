@@ -450,7 +450,7 @@ export default function PCBRobot({ boardItems = [], onPendingPlanChange }: PCBRo
     try {
       const res = await fetch(`${NN_BASE}/chat`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }), signal: AbortSignal.timeout(60000),
+        body: JSON.stringify({ messages: [...messages, { role: "user", content: text }].filter((m, idx) => !(idx === 0 && m.role === "assistant")).map(m => ({ role: m.role, content: m.content })) }), signal: AbortSignal.timeout(60000),
       });
       if (res.ok) {
         const d = await res.json() as { reply?: string };

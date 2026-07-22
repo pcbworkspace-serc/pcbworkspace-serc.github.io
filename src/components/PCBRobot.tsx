@@ -448,12 +448,38 @@ export default function PCBRobot({ boardItems = [], onPendingPlanChange }: PCBRo
  // 3) Claude-powered backend chat (primary conversational path)
     const NN_BASE = (import.meta.env.VITE_NN_URL as string | undefined) ?? "http://127.0.0.1:5000";
     try {
+      // Guest limit: send the token we were issued (if any) so the backend
+      // can count this guest's messages. Real accounts (X-API-Key) are
+      // unlimited and ignore this entirely.
+      const guestToken = (() => {
+        try { return localStorage.getItem("serc.guestToken") || ""; } catch { return ""; }
+      })();
+      const chatHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      if (guestToken) chatHeaders["X-Guest-Token"] = guestToken;
+
       const res = await fetch(`${NN_BASE}/chat`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: chatHeaders,
         body: JSON.stringify({ messages: [...messages, { role: "user", content: text }].filter((m, idx) => !(idx === 0 && m.role === "assistant")).map(m => ({ role: m.role, content: m.content })) }), signal: AbortSignal.timeout(60000),
       });
       if (res.ok) {
-        const d = await res.json() as { reply?: string };
+        const d = await res.json() as {
+          reply?: string;
+          guest_token?: string;
+          limit_reached?: boolean;
+          guest_remaining?: number;
+        };
+        // Persist the updated guest token so the count survives a reload.
+        if (d.guest_token) {
+          try { localStorage.setItem("serc.guestToken", d.guest_token); } catch {}
+        }
+        if (d.limit_reached) {
+          // Show the signup nudge and stop - do NOT fall through to the
+          // offline keyword KB, or the user would get a canned answer
+          // instead of seeing that they hit the limit.
+          appendAssistant(d.reply || "You've used your free messages. Sign up to keep going.");
+          setBusy(false);
+          return;
+        }
         if (d.reply) { appendAssistant(d.reply); setBusy(false); return; }
       }
     } catch {}

@@ -6,8 +6,9 @@
 
 import { sendSerialCommand, getSerialStatus, onSerialLine, isDemoMode } from "@/lib/serial";
 
-const VLA_PLAN_ENDPOINT    = "http://127.0.0.1:5000/vla/plan";
-const VLA_OBSERVE_ENDPOINT = "http://127.0.0.1:5000/vla/observe";
+const VLA_BASE = (import.meta.env.VITE_NN_URL as string | undefined) || "http://localhost:5000";
+const VLA_PLAN_ENDPOINT    = `${VLA_BASE}/vla/plan`;
+const VLA_OBSERVE_ENDPOINT = `${VLA_BASE}/vla/observe`;
 
 export type VLAAction =
   | { action: "home" }

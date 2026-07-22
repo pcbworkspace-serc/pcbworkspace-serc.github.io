@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { sendSerialCommand, getSerialStatus } from "@/lib/serial";
 import { planAction, executePlan, type VLAAction, type BoardStateItem } from "@/lib/vla";
 import { captureFrameByRole } from "@/lib/cameras";
@@ -56,22 +56,148 @@ function parseRobotCommand(text: string): string | null {
  return null;
 }
 
+// Inline formatting: **bold**, `code`, *italic*
+function renderInline(text: string, keyPrefix: string) {
+  return text.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/).map((part, j) => {
+    const k = `${keyPrefix}-${j}`;
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 4)
+      return <strong key={k} className="text-white font-semibold">{part.slice(2, -2)}</strong>;
+    if (part.startsWith("`") && part.endsWith("`") && part.length > 2)
+      return <code key={k} className="px-1 py-0.5 rounded bg-black/40 text-[#00d4ff] text-[12px] font-mono">{part.slice(1, -1)}</code>;
+    if (part.startsWith("*") && part.endsWith("*") && part.length > 2)
+      return <em key={k} className="text-white/70">{part.slice(1, -1)}</em>;
+    return part;
+  });
+}
+
+function splitTableRow(line: string): string[] {
+  return line.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+}
+
+const isTableSeparator = (line: string) => /^\s*\|?[\s:-]*-[\s:|-]*\|?\s*$/.test(line) && line.includes("-");
+
 function RenderMsg({ content }: { content: string }) {
- return (
- <div className="space-y-0.5">
- {content.split("\n").map((line, i) => (
- <p key={i} className={["text-sm leading-relaxed", line.startsWith("") || line.startsWith(" ") ? "pl-2" : ""].join(" ")}>
- {line.split(/(\*\*[^*]+\*\*|`[^`]+`)/).map((part, j) => {
- if (part.startsWith("**") && part.endsWith("**"))
- return <strong key={j} className="text-white">{part.slice(2, -2)}</strong>;
- if (part.startsWith("`") && part.endsWith("`"))
- return <code key={j} className="px-1 py-0.5 rounded bg-black/40 text-[#00d4ff] text-[12px] font-mono">{part.slice(1, -1)}</code>;
- return part;
- })}
- </p>
- ))}
- </div>
- );
+  const lines = content.split("\n");
+  const blocks: React.ReactNode[] = [];
+  let i = 0;
+  let listBuf: { ordered: boolean; items: string[] } | null = null;
+
+  const flushList = () => {
+    if (!listBuf) return;
+    const { ordered, items } = listBuf;
+    const cls = "my-1 space-y-0.5 text-sm leading-relaxed " + (ordered ? "list-decimal" : "list-disc");
+    blocks.push(
+      ordered
+        ? <ol key={`l${blocks.length}`} className={cls + " pl-5"}>
+            {items.map((it, n) => <li key={n}>{renderInline(it, `li${blocks.length}-${n}`)}</li>)}
+          </ol>
+        : <ul key={`l${blocks.length}`} className={cls + " pl-5"}>
+            {items.map((it, n) => <li key={n}>{renderInline(it, `li${blocks.length}-${n}`)}</li>)}
+          </ul>
+    );
+    listBuf = null;
+  };
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // blank line
+    if (!trimmed) { flushList(); i++; continue; }
+
+    // horizontal rule
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      flushList();
+      blocks.push(<hr key={`h${blocks.length}`} className="my-2 border-white/15" />);
+      i++; continue;
+    }
+
+    // table: a pipe row followed by a separator row
+    if (trimmed.includes("|") && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+      flushList();
+      const header = splitTableRow(trimmed);
+      const rows: string[][] = [];
+      let j = i + 2;
+      while (j < lines.length && lines[j].trim().includes("|") && lines[j].trim()) {
+        rows.push(splitTableRow(lines[j]));
+        j++;
+      }
+      blocks.push(
+        <div key={`t${blocks.length}`} className="my-2 overflow-x-auto">
+          <table className="w-full text-[12px] border-collapse">
+            <thead>
+              <tr className="border-b border-[#00d4ff]/30">
+                {header.map((h, n) => (
+                  <th key={n} className="text-left py-1 pr-3 font-semibold text-[#00d4ff]">
+                    {renderInline(h, `th${blocks.length}-${n}`)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, rn) => (
+                <tr key={rn} className="border-b border-white/5 last:border-0">
+                  {r.map((c, cn) => (
+                    <td key={cn} className="py-1 pr-3 align-top text-white/80">
+                      {renderInline(c, `td${blocks.length}-${rn}-${cn}`)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      i = j; continue;
+    }
+
+    // headings
+    const heading = trimmed.match(/^(#{1,4})\s+(.*)$/);
+    if (heading) {
+      flushList();
+      const level = heading[1].length;
+      const txt = heading[2];
+      const cls = level <= 2
+        ? "text-[15px] font-bold text-white mt-2 mb-1"
+        : "text-[13px] font-semibold text-[#00d4ff] mt-2 mb-0.5";
+      blocks.push(<div key={`hd${blocks.length}`} className={cls}>{renderInline(txt, `hd${blocks.length}`)}</div>);
+      i++; continue;
+    }
+
+    // blockquote
+    if (trimmed.startsWith(">")) {
+      flushList();
+      blocks.push(
+        <div key={`q${blocks.length}`} className="my-1 pl-3 border-l-2 border-[#00d4ff]/40 text-sm text-white/75 italic">
+          {renderInline(trimmed.replace(/^>\s?/, ""), `q${blocks.length}`)}
+        </div>
+      );
+      i++; continue;
+    }
+
+    // list items
+    const bullet = trimmed.match(/^[-*+]\s+(.*)$/);
+    const numbered = trimmed.match(/^\d+[.)]\s+(.*)$/);
+    if (bullet || numbered) {
+      const ordered = !!numbered;
+      const item = (bullet ? bullet[1] : numbered![1]);
+      if (!listBuf || listBuf.ordered !== ordered) { flushList(); listBuf = { ordered, items: [] }; }
+      listBuf.items.push(item);
+      i++; continue;
+    }
+
+    // plain paragraph
+    flushList();
+    blocks.push(
+      <p key={`p${blocks.length}`} className="text-sm leading-relaxed">
+        {renderInline(line, `p${blocks.length}`)}
+      </p>
+    );
+    i++;
+  }
+  flushList();
+
+  return <div className="space-y-0.5">{blocks}</div>;
 }
 
 interface PCBRobotProps {

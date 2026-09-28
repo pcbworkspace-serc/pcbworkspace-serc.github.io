@@ -13,7 +13,7 @@ export interface PlaceTarget {
 }
 
 export interface PlaceResult {
-  status: "placed" | "queued_offline" | "rejected" | "error";
+  status: "placed" | "rejected" | "error";
   message: string;
   commandId?: string;
   errors?: string[];
@@ -61,15 +61,17 @@ export async function commandPlace(target: PlaceTarget): Promise<PlaceResult> {
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     return {
-      status: "queued_offline",
-      message: `Flask server unreachable: ${errMsg}. Queued locally.`,
+      status: "error",
+      message: `Placement was not sent: ${errMsg}`,
     };
   }
 }
 
 export async function checkFlaskHealth() {
   try {
-    return await postJSON<any>("/health", {});
+    const res = await fetch(`${FLASK_BASE}/health`);
+    if (!res.ok) return null;
+    return await res.json();
   } catch {
     return null;
   }

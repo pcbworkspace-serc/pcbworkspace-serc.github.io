@@ -207,19 +207,6 @@ export async function planAction(
     return (await res.json()) as VLAPlan;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
-      // Flask offline — fall back to the offline keyword planner so the user
-      // can still see VLA work end-to-end. Tag it so the UI can warn.
-      const fallback = simulatePlan(instruction, boardState);
-      return {
-        ...fallback,
-        interpretation: `(Flask offline — using offline planner) ${fallback.interpretation}`,
-        warnings: [
-          "Local Flask server at 127.0.0.1:5000 isn't running, so I used the offline keyword stub. Start Flask with the ANTHROPIC_API_KEY env var for real Claude planning.",
-          ...fallback.warnings,
-        ],
-      };
-    }
     return { ok: false, error: msg };
   }
 }
@@ -454,8 +441,9 @@ export async function executePlan(actions: VLAAction[], opts: ExecuteOpts = {}):
           onEvent?.({ kind: "error", index: i, message: `Robot reported: ${result.line}` });
           return;
         } else {
-          robotReport = "(no ack)";
           onEvent?.({ kind: "timeout", index: i, total: actions.length });
+          onEvent?.({ kind: "error", index: i, message: "No robot acknowledgement; plan stopped." });
+          return;
         }
       }
 
@@ -472,7 +460,7 @@ export async function executePlan(actions: VLAAction[], opts: ExecuteOpts = {}):
           stepDone = true;
         } else {
           const obs = await observeStep(actionDescription(a), robotReport, frame);
-          if (!obs.ok) {
+          if ("error" in obs) {
             // Observer error — treat as skip, don't block the plan
             onEvent?.({ kind: "observe_skip", index: i, reason: obs.error });
             stepDone = true;

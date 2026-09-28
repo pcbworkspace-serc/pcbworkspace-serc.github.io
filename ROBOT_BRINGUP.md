@@ -1,38 +1,39 @@
 # MiniMEE Flask ↔ ESP32 bring-up
 
-## Wiring received 2026-09-28
+## Proposed wiring from the attached guide (2026-09-28)
 
-Krishna's attached *ESP32 + TMC2209 Standalone Wiring Guide* ends with a
-"Current Wiring" field note. It describes an ESP-WROOM-32 NodeMCU, three
-BIGTREETECH TMC2209 V1.3 modules, a 24 V supply, and a torque problem. The
-note explicitly says TMC UART RX/TX has not worked. This is a report of wiring,
-not a verified schematic or a tested fourth axis.
+The arm has **not been assembled**. Krishna's attached *ESP32 + TMC2209
+Standalone Wiring Guide* ends with a "Current Wiring" note describing an
+ESP-WROOM-32 NodeMCU, three BIGTREETECH TMC2209 V1.3 modules, and a 24 V
+supply. The note mentions a torque issue and unsuccessful UART RX/TX tests,
+but we do not know which parts, if any, were connected in those tests. Treat
+its pin list as a proposed starting point, not an as-built schematic.
 
-| Driver in field note | STEP GPIO | DIR GPIO | MS1 | MS2 |
+| Driver in guide | STEP GPIO | DIR GPIO | MS1 | MS2 |
 | --- | ---: | ---: | --- | --- |
 | TMC1 | 26 | 25 | GND | GND |
 | TMC2 | 33 | 32 | 3.3 V | GND |
 | TMC3 | 14 | 27 | GND | 3.3 V |
 
-The note puts all three EN pins on GPIO 13, all driver VDD pins on ESP32
-3.3 V, and motor supply negatives and ESP32 grounds on common ground. It lists
-GPIO 16 connected to all TMC TX and GPIO 17 to all TMC RX, but the exact
-V1.3 module UART solder bridge, line resistors, and readback have not been
-verified. The three physical motors are not mapped to robot axes in the note.
+The proposed list puts all three EN pins on GPIO 13, all driver VDD pins on
+ESP32 3.3 V, and motor supply negatives and ESP32 grounds on common ground.
+It lists GPIO 16 to all TMC TX and GPIO 17 to all TMC RX. The exact V1.3
+module UART solder bridge, line resistors, and readback have not been
+verified. The three motors are not mapped to robot axes in the guide.
 
-**Do not flash `firmware/serc_arm.ino` onto this three-driver wiring or run
-`/robot/home`, `/robot/command`, or placement against it.** That sketch's
+**Do not flash `firmware/serc_arm.ino` for the proposed three-driver wiring or
+run `/robot/home`, `/robot/command`, or placement against it.** That sketch's
 STEP/DIR/EN assignments describe a different four-axis CNC-shield arrangement
 (including GPIO 12 enable and GPIO 16/17 axis signals). It initializes four
 UART-addressed drivers, assumes 1/16 microsteps, and uses stallGuard for homing
-despite the field note saying UART has not worked. The physical axes and the
+despite the guide reporting unsuccessful UART tests. The physical axes and the
 robot's current base/shoulder/elbow/wrist kinematics also remain unresolved.
 
 The MS connections above correspond to different standalone step resolutions:
 TMC1 1/8, TMC2 1/32, TMC3 1/64, **if** the driver is actually in standalone
 mode. The firmware's global `MICROSTEPS = 16` cannot describe that wiring.
 When UART is enabled, the same pins select addresses 0, 1, and 2 instead.
-Check the actual mode and module jumpers before diagnosing the torque issue.
+Check the actual mode and module jumpers when investigating the reported torque issue.
 The guide's `Vref = Irms × 1.44` and fixed clockwise-increases-current advice
 should not be used as universal calibration instructions: BTT's published
 110 mΩ board formula is `I_RMS ≈ VREF / sqrt(2)` and its documented pot
@@ -43,22 +44,23 @@ loose jumpers are unsuitable for sustained motor current; mount the drivers
 and the local VMOT decoupling securely before loaded tests.
 
 The earlier one-motor example in the attachment uses GPIO 14/12/13 and is
-not the later three-driver field wiring. GPIO 12 is also an ESP32 boot
-strapping pin, so avoid using that example as a current wiring diagram.
+not the later three-driver proposal. GPIO 12 is also an ESP32 boot strapping
+pin, so avoid using that example as the arm wiring diagram.
 
 Sources: [TMC2209 datasheet](https://www.analog.com/media/en/technical-documentation/data-sheets/tmc2209_datasheet_rev1.09.pdf),
 [BIGTREETECH TMC2209 guide](https://global.bttwiki.com/TMC2209.html),
 [Espressif boot pins](https://docs.espressif.com/projects/esptool/en/latest/esp32/advanced-topics/boot-mode-selection.html).
 
-### Next bench evidence
+### Before assembly and bench testing
 
-Photograph both sides of each driver and the ESP32, record each motor's exact
-part number/current rating and which driver powers it, and draw the actual
-EN, STEP, DIR, MS1, MS2, PDN/UART, VMOT, VDD, and common-ground connections.
-Measure Vref and identify whether UART readback works for each addressed
-driver. Then we can create a matching, bounded one-axis firmware test and a
-four-axis pin map. Until those measurements exist, the software tests below
-verify the HTTP/serial protocol only.
+Use the three CAD archives to settle the axis layout and choose a fourth
+driver, then draw a four-axis schematic with an explicit motor/driver mapping,
+EN, STEP, DIR, MS1, MS2, PDN/UART, VMOT, VDD, common ground, end stops or
+encoder references, and a physical emergency stop. Record each motor's exact
+part number and rated phase current. The bench phase can then measure Vref,
+check UART readback per driver, and use a bounded one-axis test before any
+assembled-arm motion. Until then, the software tests below verify only the
+HTTP/serial protocol.
 
 The launched `flask_server.py` registers `routes_robot.py` and speaks the
 newline-delimited JSON protocol in `firmware/serc_arm.ino`. The older

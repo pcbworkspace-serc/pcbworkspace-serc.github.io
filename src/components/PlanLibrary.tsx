@@ -7,8 +7,7 @@ interface PlanLibraryProps {
 }
 
 /**
- * Popover panel showing all saved VLA plans. Click a row to execute it
- * (re-uses the captured action sequence — no LLM round-trip).
+ * Popover panel showing saved VLA plans. Selection stages a review preview.
  *
  * Rendered conditionally from PCBRobot.tsx; positioning is anchored to
  * the parent's relative container.
@@ -49,7 +48,7 @@ export default function PlanLibrary({ onClose, onSelect }: PlanLibraryProps) {
       {plans.length === 0 ? (
         <div className="px-3 py-4 text-[10px] text-white/50 text-center leading-relaxed">
           No saved plans yet.<br/>
-          Run a VLA plan that works well, then click "Save plan" in the chat to add one.
+          Preview a VLA plan, then click "Save plan" in the chat to add one.
         </div>
       ) : (
         <div className="max-h-[400px] overflow-y-auto">
@@ -87,7 +86,7 @@ export default function PlanLibrary({ onClose, onSelect }: PlanLibraryProps) {
       )}
 
       <div className="px-3 py-1.5 border-t border-white/10 bg-black/40 text-[9px] text-white/40">
-        Click a plan to execute immediately. No LLM cost — replays exactly.
+        Click a plan to review its steps before a Demo Mode simulation.
       </div>
     </div>
   );

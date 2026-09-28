@@ -6,12 +6,14 @@ import threading
 import unittest
 from unittest.mock import patch
 
+import auth_middleware
+import flask_server
 import robot_control
 
 
 @unittest.skipUnless(os.name == "posix", "pseudo terminals require POSIX")
 class SerialPtyTests(unittest.TestCase):
-    def test_status_handshake_and_motion_over_serial_port(self):
+    def test_flask_status_home_and_move_over_serial_port(self):
         import pty
 
         master, slave = pty.openpty()
@@ -45,18 +47,24 @@ class SerialPtyTests(unittest.TestCase):
 
         thread = threading.Thread(target=firmware, daemon=True)
         thread.start()
-        robot = None
         try:
-            with patch.dict(os.environ, {"SERC_SIMULATION": "0"}):
-                robot = robot_control.Robot(port=port)
-                robot.home(timeout=1)
-                robot.move_joints(0, 10, 20, 30, timeout=1)
-            self.assertTrue(robot.state.connected)
+            robot_control._robot = None
+            with (patch.dict(os.environ, {"SERC_SIMULATION": "0"}),
+                  patch.object(robot_control.config, "SERIAL_PORT", port),
+                  patch.object(auth_middleware, "_DISABLED", True)):
+                client = flask_server.app.test_client()
+                health = client.get("/health").get_json()
+                self.assertTrue(health["arm_connected"])
+                self.assertFalse(health["simulation"])
+                self.assertEqual(client.post("/robot/home").status_code, 200)
+                move = client.post("/robot/command", json={"cmd": "move", "x": 180, "y": 0, "z": 20})
+                self.assertEqual(move.status_code, 200, move.get_json())
             self.assertEqual([c["cmd"] for c in commands], ["status", "home", "move"])
-            self.assertEqual(commands[-1]["j"], [0, 10, 20, 30])
+            self.assertEqual(len(commands[-1]["j"]), 4)
         finally:
-            if robot is not None:
-                robot.shutdown()
+            if robot_control._robot is not None:
+                robot_control._robot.shutdown()
+                robot_control._robot = None
             stop.set()
             os.close(master)
             os.close(slave)

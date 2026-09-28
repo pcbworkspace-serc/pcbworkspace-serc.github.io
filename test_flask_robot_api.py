@@ -7,6 +7,7 @@ os.environ["SERC_AUTH_DISABLED"] = "1"
 
 import flask_server
 import robot_control
+import auth_middleware
 
 
 class FlaskRobotApiTests(unittest.TestCase):
@@ -14,6 +15,8 @@ class FlaskRobotApiTests(unittest.TestCase):
         robot_control._robot = None
         self.env = patch.dict(os.environ, {"SERC_SIMULATION": "1"})
         self.env.start()
+        self.auth = patch.object(auth_middleware, "_DISABLED", True)
+        self.auth.start()
         self.client = flask_server.app.test_client()
 
     def tearDown(self):
@@ -21,6 +24,7 @@ class FlaskRobotApiTests(unittest.TestCase):
             robot_control._robot.shutdown()
             robot_control._robot = None
         self.env.stop()
+        self.auth.stop()
 
     def test_health_home_and_joint_move_reach_json_transport(self):
         health = self.client.get("/health").get_json()

@@ -60,6 +60,13 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Robot backend simulation
+
+The Python robot backend requires a working serial connection to the ESP32. To
+exercise its JSON command path without hardware, explicitly set
+`SERC_SIMULATION=1` before starting the backend. Without this setting, an
+unavailable serial port is an error; it does not report a connected robot.
+
 ## How can I deploy this project?
 
 This repository is configured for GitHub Pages from the `main` branch using the `/docs` folder.

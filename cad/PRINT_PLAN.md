@@ -14,7 +14,31 @@ kinematics describe a different base/shoulder/elbow/wrist arrangement, so
 printing the legacy parts would lock in a mechanical layout that the planned
 SCARA controller does not model.
 
-### First fit-check prints, when the motors are in hand
+### First prints from the new editable CAD
+
+Run `python cad/scara_fit_prototype.py` to export separate STEP and STL files
+to `cad/fit_prototype/`. The two links, base and spacer make a hand-operated
+reach mockup. Their pivot holes are 5.4 mm and joint-center distances are
+150 and 180 mm by default. Check whether the 210 mm overall second link fits
+your printer. If it does not, change the center distance only after checking
+the workspace, or print a scaled paper outline; do not scale a motor interface.
+
+| New export | Quantity | Check |
+| --- | ---: | --- |
+| `base_reach_mockup.stl` | 1 | Fix to a bench fixture; mounting holes depend on that fixture. |
+| `link1_reach_mockup.stl` | 1 | Joint 1 to joint 2 reach, collision around the base. |
+| `link2_reach_mockup.stl` | 1 | Joint 2 to nozzle projection, PCB and feeder reach. |
+| `elbow_spacer_reach_mockup.stl` | 1 | Hand-operated link clearance with washers/fastener. |
+| `nema17_face_gauge.stl` | 1 | Pilot and four motor fasteners, **after entering actual motor drawing dimensions**. |
+| `nema14_face_gauge.stl` | 1 | Same for actual NEMA 14. |
+
+Use loose M5 hardware and washers for manual motion; this is a position
+mockup without a supported bearing joint. The link STL pivot holes and default
+gauge dimensions are not a tolerance certification. Compare pilot, bolt
+pattern, shaft protrusion, and screw length against the actual motor drawings.
+There is no NEMA 8 coupon until its exact hollow-shaft interface is known.
+
+### Optional comparisons from the old archives, when motors are in hand
 
 | Print one of | Archive | Purpose | Acceptance check |
 | --- | --- | --- | --- |
@@ -22,11 +46,9 @@ SCARA controller does not model.
 | `serc_nema14_arm1.stl` | SERC Final Assembly | NEMA 14 mounting *sample only* | Same checks with actual NEMA 14. Do not assume the similarly named joint3/joint4 pieces belong to the new Z axis. |
 | `rev2_arm1.stl` | Kboy revised arm | Link cross-section/print orientation *sample only* | Measure actual center-to-center hole distance and bending by hand with safe loads; outer bounding length is 110 mm and is **not** a joint spacing. |
 
-These are sacrificial fit samples, **not** the parts list for a working arm.
-Print only after confirming STL units in a slicer and checking that no
-unexpected internal geometry or supports invalidate the sample. A small
-parameterized motor-face coupon can replace the bulky mounts once motor
-drawings and caliper measurements are available.
+These legacy parts are optional sacrificial samples, **not** the parts list
+for a working arm. Prefer the smaller parametric face gauges above for the
+first motor fit test. Check STL units in the slicer before any legacy print.
 
 ### Archive triage
 

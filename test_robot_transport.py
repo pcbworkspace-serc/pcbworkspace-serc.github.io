@@ -6,7 +6,7 @@ import types
 import unittest
 from unittest.mock import patch
 
-from robot_control import Robot, _open_serial, _SerialStub
+from robot_control import Robot, _open_serial, _SerialStub, _verify_serial_protocol
 
 
 class RobotTransportTests(unittest.TestCase):
@@ -52,6 +52,20 @@ class RobotTransportTests(unittest.TestCase):
                     robot._send({"cmd": "move"})
             finally:
                 robot.shutdown()
+
+    def test_handshake_rejects_gcode_only_device(self):
+        class GcodePort:
+            def write(self, data):
+                self.last_command = data
+
+            def readline(self):
+                return b"ok G0\n"
+
+        port = GcodePort()
+        with patch("robot_control.config.SERIAL_HANDSHAKE_TIMEOUT", 0.02):
+            with self.assertRaisesRegex(ConnectionError, "JSON status"):
+                _verify_serial_protocol(port)
+        self.assertEqual(port.last_command, b'{"cmd":"status","id":0}\n')
 
 
 if __name__ == "__main__":

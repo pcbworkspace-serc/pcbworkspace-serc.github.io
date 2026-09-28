@@ -46,6 +46,7 @@ DEFAULT_PLACE_DEPTH_MM = 1.0
 SERIAL_PORT = os.environ.get("SERC_SERIAL", "/dev/ttyUSB0")  # or COM3 on Windows
 SERIAL_BAUD = 115200
 SERIAL_TIMEOUT = 0.1                # seconds; non-blocking-ish reads
+SERIAL_HANDSHAKE_TIMEOUT = 5.0      # wait for JSON status from the ESP32
 
 # ── Calibration storage ──────────────────────────────────────────────────────
 # Two separate calibrations are persisted between runs:

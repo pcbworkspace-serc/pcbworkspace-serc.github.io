@@ -77,6 +77,10 @@ export function useRobotPlacement() {
           y: bin[1],
         });
 
+        if (result.status !== "placed") {
+          throw new Error(result.message);
+        }
+
         emitLine(`> ${result.message}`);
         toast({
           title: `Placed ${componentType}`,

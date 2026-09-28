@@ -66,6 +66,9 @@ The Python robot backend requires a working serial connection to the ESP32. To
 exercise its JSON command path without hardware, explicitly set
 `SERC_SIMULATION=1` before starting the backend. Without this setting, an
 unavailable serial port is an error; it does not report a connected robot.
+Install `requirements-robot.txt` and follow [ROBOT_BRINGUP.md](ROBOT_BRINGUP.md)
+for the handshake, API tests, and physical wiring prerequisites. The
+provisional editable SCARA layout is in [cad/](cad/).
 
 ## How can I deploy this project?
 

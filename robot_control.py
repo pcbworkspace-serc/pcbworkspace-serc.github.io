@@ -69,6 +69,27 @@ def _open_serial(port: str, baud: int):
     return serial.Serial(port, baud, timeout=config.SERIAL_TIMEOUT)
 
 
+def _verify_serial_protocol(ser) -> None:
+    """Require a status reply from the JSON firmware before marking it online."""
+    deadline = time.monotonic() + config.SERIAL_HANDSHAKE_TIMEOUT
+    next_probe = 0.0
+    while time.monotonic() < deadline:
+        now = time.monotonic()
+        if now >= next_probe:
+            ser.write(b'{"cmd":"status","id":0}\n')
+            next_probe = now + 0.5
+        line = ser.readline()
+        if not line:
+            continue
+        try:
+            msg = json.loads(line.decode().strip())
+        except (UnicodeError, ValueError):
+            continue
+        if isinstance(msg, dict) and isinstance(msg.get("status"), dict):
+            return
+    raise ConnectionError("ESP32 did not answer the JSON status handshake")
+
+
 # ── Robot driver ────────────────────────────────────────────────────────────
 @dataclass
 class RobotState:
@@ -86,6 +107,11 @@ class Robot:
         self.port = port or config.SERIAL_PORT
         self.baud = baud
         self._ser = _open_serial(self.port, self.baud)
+        try:
+            _verify_serial_protocol(self._ser)
+        except Exception:
+            self._ser.close()
+            raise
         self.state = RobotState(connected=True)
         self._cmd_id = 0
         self._lock = threading.Lock()

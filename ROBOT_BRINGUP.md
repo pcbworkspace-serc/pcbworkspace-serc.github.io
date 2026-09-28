@@ -1,5 +1,23 @@
 # MiniMEE Flask ↔ ESP32 bring-up
 
+## Layla conversation and planning
+
+The main `PCBRobot` panel sends user/assistant Q&A turns to Flask `POST /chat`.
+Flask keeps no secret server-side session; the browser sends the last several
+conversational turns on each request. Simulated telemetry and plan logs are
+excluded. Set `ANTHROPIC_API_KEY` on the Flask process for model replies.
+If the key or server is missing, the UI reports that chat is unavailable
+instead of falling back to stale keyword answers. This endpoint **never**
+sends robot commands.
+
+VLA Mode calls `POST /vla/plan` with either JSON or multipart form input and
+shows the proposed actions for review. Saved plans also reopen for review.
+The chat panel can run the legacy text-action sequence only in explicit Demo
+Mode; the physical ESP32 JSON protocol is not exposed through that path.
+Actual hardware motion remains gated on assembly, kinematics, wiring,
+calibration, and a reviewed control path. Test the conversation contract with
+`python -m unittest -v test_layla_chat` (the model call is mocked).
+
 ## Proposed wiring from the attached guide (2026-09-28)
 
 The arm has **not been assembled**. Krishna's attached *ESP32 + TMC2209

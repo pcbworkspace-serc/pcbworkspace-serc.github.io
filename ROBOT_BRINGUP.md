@@ -18,6 +18,14 @@ Actual hardware motion remains gated on assembly, kinematics, wiring,
 calibration, and a reviewed control path. Test the conversation contract with
 `python -m unittest -v test_layla_chat` (the model call is mocked).
 
+The repository's `.env.production` points `VITE_NN_URL` at
+`https://pcbworkspace-backend.onrender.com`. The code changes in this PR
+update the local Flask entry point and frontend source; a hosted frontend will
+use the hosted backend until that backend is updated with the same `/chat`
+contract. We have not verified the hosted backend's current behavior or
+deployed this PR. For local review, use `npm run dev` and the local Flask
+server; do not assume the published site is running this change.
+
 ## Proposed wiring from the attached guide (2026-09-28)
 
 The arm has **not been assembled**. Krishna's attached *ESP32 + TMC2209

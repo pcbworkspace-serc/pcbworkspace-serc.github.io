@@ -21,3 +21,5 @@ pending motor torque curves and moving-mass calculations.
 This model intentionally contains envelope solids only. Do not manufacture it
 as a load-bearing arm. The next CAD revision will replace these with parts and
 mates after measuring the hardware and setting the board/feeder workspace.
+
+See [PRINT_PLAN.md](PRINT_PLAN.md) for archive-by-archive print decisions and the required CAD changes.

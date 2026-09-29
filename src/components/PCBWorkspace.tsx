@@ -32,6 +32,18 @@ type PCBWorkspaceProps = {
 };
 
 let _activeCanvas: HTMLCanvasElement | null = null;
+let webglAvailable: boolean | undefined;
+function canRender3D(): boolean {
+  if (webglAvailable !== undefined) return webglAvailable;
+  try {
+    const canvas = document.createElement("canvas");
+    webglAvailable = !!(canvas.getContext("webgl2") || canvas.getContext("webgl"));
+  } catch {
+    webglAvailable = false;
+  }
+  return webglAvailable;
+}
+
 export async function captureScene(): Promise<Blob | null> {
   const canvas = _activeCanvas;
   if (!canvas) return null;
@@ -948,6 +960,23 @@ const cameraRef = useRef<THREE.Camera | null>(null);
     <div className="w-full h-full relative"
          onDragOver={(e) => e.preventDefault()}
          onDrop={handleDrop}>
+      {!canRender3D() ? (
+        <div className="h-full overflow-auto p-6 text-slate-200 bg-slate-900">
+          <h2 className="text-lg font-semibold">3D preview unavailable</h2>
+          <p className="mt-2 text-sm text-slate-300">This browser cannot start WebGL. Layla chat and plan review remain available.</p>
+          {droppedItems.length > 0 && (
+            <div className="mt-4 text-sm">
+              <h3 className="font-semibold">Board items</h3>
+              <ul className="mt-1 list-disc pl-5">
+                {droppedItems.map((item, i) => <li key={i}>{item.type} at ({item.x.toFixed(2)}, {item.y.toFixed(2)})</li>)}
+              </ul>
+            </div>
+          )}
+          {!!previewItems?.length && (
+            <p className="mt-4 text-sm text-cyan-200">A plan has {previewItems.length} preview item(s). Review its details in Layla before confirming.</p>
+          )}
+        </div>
+      ) : (
       <Canvas
         camera={{ position: [4, 5, 4], fov: 50 }}
         shadows
@@ -1037,6 +1066,7 @@ const cameraRef = useRef<THREE.Camera | null>(null);
           maxPolarAngle={Math.PI / 2.1} minDistance={2} maxDistance={15}
         />
       </Canvas>
+      )}
     </div>
   );
 }

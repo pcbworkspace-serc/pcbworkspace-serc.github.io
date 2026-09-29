@@ -2,7 +2,7 @@
 // Run:  node seed_users.mjs
 // Requires: npm i @supabase/supabase-js
 //
-// Set these in your shell first (do NOT hardcode the service-role key):
+// Set these in your shell first (do NOT hardcode credentials):
 //   PowerShell:
 //   $env:SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
 //   $env:SUPABASE_SERVICE_ROLE_KEY="eyJ...your service role key..."
@@ -11,17 +11,16 @@ import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const PASSWORD = process.env.SERC_SEED_PASSWORD;
 
-if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-  console.error("Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY env vars first.");
+if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !PASSWORD) {
+  console.error("Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and SERC_SEED_PASSWORD env vars first.");
   process.exit(1);
 }
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
-
-const PASSWORD = "sercdevelopers";
 
 const emails = [
   "122bsh@gmail.com",

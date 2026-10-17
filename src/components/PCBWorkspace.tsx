@@ -578,7 +578,8 @@ function UBracket({ width = 0.13 }: { width?: number }) {
       {/* Bolt heads */}
       {[-1, 1].map(s => (
         <mesh key={s} position={[s * (width / 2 - t / 2), -0.02, 0.045]}>
-          <cylinderGeometry args={[0.014, 0.014, 0.012, 6]} rotation={[0, 0, Math.PI/2]} />
+          {/* a geometry has no rotation of its own; the old rotation prop here never applied */}
+          <cylinderGeometry args={[0.014, 0.014, 0.012, 6]} />
           <meshStandardMaterial color="#475569" metalness={0.95} roughness={0.1} />
         </mesh>
       ))}
@@ -661,7 +662,7 @@ function EndEffector({
 function RobotArmVisualization({
   previewItems,
 }: {
-  previewItems: { x: number; y: number; rotation_deg: number; type?: string }[] | undefined;
+  previewItems: DroppedItem[] | undefined;
 }) {
   const j1Ref   = useRef<THREE.Group>(null);
   const j2Ref   = useRef<THREE.Group>(null);

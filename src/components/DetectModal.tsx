@@ -183,7 +183,7 @@ export default function DetectModal({
 
         <h2 className="text-2xl font-bold text-primary mb-1">PCB Detection</h2>
 
-        {/* Method picker â€” moved here from the toolbar */}
+        {/* Method picker — moved here from the toolbar */}
         <div className="flex items-center gap-2 mb-4">
           <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Method:</span>
           <div className="flex items-stretch rounded-md border border-primary/30 overflow-hidden text-[10px] font-bold uppercase tracking-wider">
@@ -210,7 +210,7 @@ export default function DetectModal({
         </div>
 
         <p className="text-xs text-muted-foreground mb-5">
-          {result?.mlModel ?? "Layla Vision Â· CNN backend"}
+          {result?.mlModel ?? "Layla Vision · CNN backend"}
         </p>
 
         {loading && <ElapsedTimer />}
@@ -254,13 +254,13 @@ export default function DetectModal({
               onLabelingChange={setLabeling}
             />
 
-            {/* Empty state â€” no boxes found */}
+            {/* Empty state — no boxes found */}
             {noBoxes && (
               <div className="mb-5 px-3 py-3 rounded-md bg-blue-500/10 border border-blue-500/30 text-[12px] text-blue-300">
                 <p className="font-bold mb-1">No components detected.</p>
                 <p className="text-blue-300/70">
                   Try the other detection method, or upload a clearer image of a PCB.
-                  This model was trained on the FPIC dataset â€” close-ups of green PCBs with surface-mount parts work best.
+                  This model was trained on the FPIC dataset — close-ups of green PCBs with surface-mount parts work best.
                 </p>
               </div>
             )}
@@ -281,9 +281,9 @@ export default function DetectModal({
                       <div className="w-3 h-3 rounded" style={{ backgroundColor: colorForClass(b.class) }} />
                       <span className="font-bold text-foreground">{b.class}</span>
                       <span className="text-muted-foreground">{b.class_full}</span>
-                      {(b as any).yolo_score !== undefined && (
+                      {b.yolo_score !== undefined && (
                         <span className="text-[9px] text-muted-foreground/70 font-mono ml-1">
-                          yolo {((b as any).yolo_score * 100).toFixed(0)}% Â· cls {((b as any).classifier_score * 100).toFixed(0)}%
+                          yolo {(b.yolo_score * 100).toFixed(0)}% · cls {((b.classifier_score ?? 0) * 100).toFixed(0)}%
                         </span>
                       )}
                       <span className="ml-auto font-mono" style={{ color: scoreColor(b.score) }}>

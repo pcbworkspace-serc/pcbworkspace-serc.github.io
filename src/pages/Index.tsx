@@ -40,10 +40,10 @@ function getSavedProjectsKey2(email: string) { return `pcbworkspace.savedProject
 function getRecentsKey2(email: string) { return `pcbworkspace.recentFiles.v2:${email.trim().toLowerCase()}`; }
 
 function loadRecents(email: string): RecentFile[] {
-  try { const raw = localStorage.getItem(getRecentsKey2(email)); if (!raw) return []; const p = JSON.parse(raw); if (!Array.isArray(p)) return []; return p.filter((x: any) => x?.name && x?.openedAt).sort((a: any,b: any)=>b.openedAt-a.openedAt).slice(0,MAX_RECENTS); } catch { return []; }
+  try { const raw = localStorage.getItem(getRecentsKey2(email)); if (!raw) return []; const p = JSON.parse(raw); if (!Array.isArray(p)) return []; return p.filter((x: RecentFile) => x?.name && x?.openedAt).sort((a: RecentFile,b: RecentFile)=>b.openedAt-a.openedAt).slice(0,MAX_RECENTS); } catch { return []; }
 }
 function loadSavedProjects(email: string): SavedProject[] {
-  try { const raw = localStorage.getItem(getSavedProjectsKey2(email)); if (!raw) return []; const p = JSON.parse(raw); if (!Array.isArray(p)) return []; return p.sort((a: any,b: any)=>b.lastOpened-a.lastOpened); } catch { return []; }
+  try { const raw = localStorage.getItem(getSavedProjectsKey2(email)); if (!raw) return []; const p = JSON.parse(raw); if (!Array.isArray(p)) return []; return p.sort((a: SavedProject,b: SavedProject)=>b.lastOpened-a.lastOpened); } catch { return []; }
 }
 function saveProjects(email: string, projects: SavedProject[]) {
   localStorage.setItem(getSavedProjectsKey2(email), JSON.stringify(projects.slice(0,MAX_SAVED_PROJECTS)));
@@ -54,7 +54,10 @@ function downloadJson(filename: string, data: unknown) {
 }
 function parseBoardItems(value: unknown): BoardItem[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((item: any) => item?.type && typeof item.x==="number" && typeof item.y==="number");
+  return value.filter((item): item is BoardItem => {
+    const i = item as Partial<BoardItem> | null;
+    return !!i?.type && typeof i.x==="number" && typeof i.y==="number";
+  });
 }
 function itemToMm(item: BoardItem) {
   return {
@@ -234,9 +237,9 @@ const Index = () => {
     let frame: Blob | null = null;
     let source = 'no image';
     let frameSource: FrameSource | null = null;
-    try { frame = await grabCameraFrame(); if (frame) { source = 'camera'; frameSource = "camera"; } } catch {}
+    try { frame = await grabCameraFrame(); if (frame) { source = 'camera'; frameSource = "camera"; } } catch { /* no camera: try the 3D scene */ }
     if (!frame) {
-      try { frame = await captureScene(); if (frame) { source = '3D scene'; frameSource = "scene_render"; } } catch {}
+      try { frame = await captureScene(); if (frame) { source = '3D scene'; frameSource = "scene_render"; } } catch { /* no scene either: detect without an image */ }
     }
     const url = frame ? URL.createObjectURL(frame) : null;
     await runDetectionWith(frame, source, url, detectMethod, frameSource);
@@ -347,7 +350,7 @@ const Index = () => {
       const reader = new FileReader();
       reader.onload = () => {
         try {
-          const parsed = JSON.parse(String(reader.result??"{}")) as any;
+          const parsed = JSON.parse(String(reader.result??"{}")) as { projectName?: string; projectId?: string; savedAt?: string; boardItems?: unknown };
           const timestamp = Date.now();
           const importedName = parsed.projectName ?? file.name.replace(/\.json$/i,"") ?? "Imported";
           const importedId = parsed.projectId ?? `${importedName}-${timestamp}`;

@@ -100,11 +100,13 @@ export function BoxLabeler({ imageUrl, imageSize, captureId, labeler, board }: {
       <p className="text-[11px] text-muted-foreground mb-2">
         Drag a tight box around every part you can see, then set its class. Parts cut off at the edge count too.
       </p>
-      <label className="text-[11px] text-muted-foreground mr-2">Class for the next box</label>
-      <select value={cls} onChange={(e) => setCls(e.target.value)} aria-label="Class for the next box"
-        className="mb-2 bg-secondary/50 border border-border rounded px-1 py-0.5 text-[11px] text-foreground">
-        {CLASS_CODES.map((c) => <option key={c} value={c}>{c} — {COMPONENT_FULL_NAMES[c]}</option>)}
-      </select>
+      <div className="flex items-center gap-2 mb-2">
+        <label className="text-[11px] text-muted-foreground">Class for the next box</label>
+        <select value={cls} onChange={(e) => setCls(e.target.value)} aria-label="Class for the next box"
+          className="bg-secondary/50 border border-border rounded px-1 py-0.5 text-[11px] text-foreground">
+          {CLASS_CODES.map((c) => <option key={c} value={c}>{c} — {COMPONENT_FULL_NAMES[c]}</option>)}
+        </select>
+      </div>
       <div className="relative inline-block max-w-full select-none">
         <img src={imageUrl} alt="Frame to label" draggable={false}
           className="max-w-full max-h-[360px] object-contain rounded-md border border-border" />

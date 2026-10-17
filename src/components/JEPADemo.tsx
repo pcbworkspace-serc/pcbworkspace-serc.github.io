@@ -1,13 +1,17 @@
 ﻿import { useState, useEffect } from "react";
 
+// An illustration of the planned sequence, not a recording: the arm isn't
+// assembled, and nothing here has been measured. Each step says what will
+// be measured instead of showing a number, so the demo can't be mistaken
+// for SERC performance data.
 const STEPS = [
-  { id:1, title:"Board Scan", desc:"The top camera captures a full frame of the PCB board. JEPA's ComponentDetector identifies fiducial markers and maps pad locations — no manual calibration needed.", icon:"📷", color:"#00a3ff", detail:"Scanning 6.2 × 4.2cm board area at 1080p resolution. Detected 4 fiducials, 77 component pads." },
-  { id:2, title:"Arm Moves to Tray", desc:"The 4-axis arm navigates to the component tray. Inverse kinematics calculates the joint angles needed to reach the target pick position.", icon:"🦾", color:"#a855f7", detail:"Joint angles: J1=45° J2=-30° J3=60° J4=0°. Velocity: 120mm/s. Approach height: 15mm." },
-  { id:3, title:"Vacuum Pick", desc:"The nozzle descends and the vacuum activates. Pressure sensors confirm a successful grasp — if suction fails, the pick is automatically retried.", icon:"⚡", color:"#f59e0b", detail:"Vacuum pressure: -65 kPa. Pick confirmed in 85ms. Component: 0402 Resistor 10kΩ." },
-  { id:4, title:"Bottom Camera Analysis", desc:"The arm flies the component over the bottom camera. JEPA's AlignmentCorrector analyzes the image in embedding space — robust to lighting changes.", icon:"🔍", color:"#10b981", detail:"JEPA inference: 12ms. Embedding dim: 256. Processing 30 frames/sec." },
-  { id:5, title:"JEPA Correction Applied", desc:"The neural network outputs the correction vector: Δθ, Δx, Δy. The hollow-shaft motor rotates the nozzle, the arm shifts XY position.", icon:"🧠", color:"#00d4ff", detail:"Δθ = +12.4°   Δx = +0.18mm   Δy = −0.09mm. Correction applied in 8ms." },
-  { id:6, title:"Precision Placement", desc:"With all corrections applied, the arm descends and places the component on the target pad. A 150ms settle delay ensures vibrations decay.", icon:"🎯", color:"#22c55e", detail:"Placement accuracy: ±0.08mm. Force: 0.3N. Z-descent speed: 5mm/s." },
-  { id:7, title:"Placement Validation", desc:"The top camera captures a post-placement frame. JEPA's PlacementValidator compares pre/post embeddings to detect tombstoning, misalignment, or wrong components.", icon:"✅", color:"#22c55e", detail:"RESULT: PASS ✓   Confidence: 99.2%   Offset: 0.04mm   Rotation error: 0.3°" },
+  { id:1, title:"Board Scan", desc:"The top camera captures a frame of the board. The YOLOv8n + MobileNetV3 detector proposes and classifies parts, and a saved camera calibration maps pixels to board millimetres.", icon:"📷", color:"#00a3ff", detail:"To be measured: per-class detection precision and recall on held-out SERC boards. Not measured yet." },
+  { id:2, title:"Arm Moves to Tray", desc:"The arm moves to the component tray. Inverse kinematics gives the joint angles for the pick position, and the planner drops any target outside the board or the arm's reach.", icon:"🦾", color:"#a855f7", detail:"To be measured: how accurately and repeatably the arm reaches a commanded position, once it is assembled." },
+  { id:3, title:"Vacuum Pick", desc:"The nozzle descends and vacuum lifts the part. The nozzle, vacuum and pick confirmation are not built or tested yet.", icon:"⚡", color:"#f59e0b", detail:"To be measured: pick success rate for each part size." },
+  { id:4, title:"Bottom Camera Analysis", desc:"The part is held over the bottom camera and the alignment path estimates its rotation and offset: a trained head (synthetic training data so far), with a classical computer-vision fallback.", icon:"🔍", color:"#10b981", detail:"To be measured: alignment error in degrees and mm on real frames labeled by people. Only synthetic-render numbers exist so far." },
+  { id:5, title:"Correction Applied", desc:"The estimated correction is applied: the nozzle turns by Δθ and the arm shifts by Δx, Δy.", icon:"🧠", color:"#00d4ff", detail:"To be measured: the error that remains after the correction." },
+  { id:6, title:"Placement", desc:"The arm descends and places the part on its pad.", icon:"🎯", color:"#22c55e", detail:"To be measured: end-to-end placement accuracy in mm and degrees, with confidence intervals. Not measured; the arm isn't assembled." },
+  { id:7, title:"Placement Validation", desc:"The top camera captures the placed part and a validator flags missing, tombstoned or misaligned parts (trained on synthetic data so far).", icon:"✅", color:"#22c55e", detail:"To be measured: how often the validator's pass/fail call matches a person's on real placements." },
 ];
 
 function ArmSVG({ step }: { step: number }) {
@@ -61,7 +65,7 @@ function ArmSVG({ step }: { step: number }) {
       {step===3&&<circle cx="50" cy="90" r="3" fill="none" stroke="#00ffcc" strokeWidth="0.4"><animate attributeName="r" values="3;7;3" dur="0.8s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0;1" dur="0.8s" repeatCount="indefinite"/></circle>}
       <text x="50" y="97.5" textAnchor="middle" fill="#475569" fontSize="2.5" fontWeight="bold">CAM</text>
       {/* Correction arrow */}
-      {step===4&&<><path d={`M ${p.ex+4} ${p.ey-2} Q ${p.ex+9} ${p.ey-7} ${p.ex+7} ${p.ey}`} fill="none" stroke="#f59e0b" strokeWidth="0.6"/><text x={p.ex+11} y={p.ey-5} fill="#f59e0b" fontSize="3" fontWeight="bold">+12.4°</text></>}
+      {step===4&&<><path d={`M ${p.ex+4} ${p.ey-2} Q ${p.ex+9} ${p.ey-7} ${p.ex+7} ${p.ey}`} fill="none" stroke="#f59e0b" strokeWidth="0.6"/><text x={p.ex+11} y={p.ey-5} fill="#f59e0b" fontSize="3" fontWeight="bold">Δθ</text></>}
     </svg>
   );
 }
@@ -93,10 +97,15 @@ export default function JEPADemo({ onClose }: { onClose: () => void }) {
             <div className="h-9 w-9 bg-black/30 rounded-xl flex items-center justify-center"><span className="text-white font-black text-xs">JEPA</span></div>
             <div>
               <h2 className="text-white font-black text-lg leading-tight uppercase tracking-tight">JEPA Vision — Robot Demo</h2>
-              <p className="text-[9px] font-bold text-white/70 uppercase tracking-widest">Step-by-step arm & neural network walkthrough</p>
+              <p className="text-[9px] font-bold text-white/70 uppercase tracking-widest">Illustration of the planned sequence</p>
             </div>
           </div>
           <button onClick={onClose} className="text-white/70 hover:text-white text-2xl font-bold">×</button>
+        </div>
+
+        <div className="px-5 py-2 text-[11px] text-amber-200 bg-amber-500/10 border-b border-amber-500/20 shrink-0">
+          This is an animation of how the system is meant to work, not a recording. The arm isn't assembled and none of
+          these steps has been measured yet.
         </div>
 
         {/* Progress bar */}
@@ -113,7 +122,7 @@ export default function JEPADemo({ onClose }: { onClose: () => void }) {
             </div>
             <div className="px-3 pb-3">
               <div className="rounded-lg px-2 py-1.5 text-center text-[10px] font-bold uppercase tracking-widest border" style={{borderColor:`${cur.color}40`,backgroundColor:`${cur.color}15`,color:cur.color}}>
-                {cur.icon} {step < 3 ? "MECHANICAL" : "JEPA ACTIVE"}
+                {cur.icon} {step < 3 ? "MECHANICAL" : "VISION"}
               </div>
             </div>
           </div>
@@ -131,7 +140,7 @@ export default function JEPADemo({ onClose }: { onClose: () => void }) {
 
             {/* Data readout */}
             <div className="rounded-xl border border-white/5 bg-black/40 p-4">
-              <p className="text-[9px] text-white/30 uppercase tracking-widest mb-2">System Output</p>
+              <p className="text-[9px] text-white/30 uppercase tracking-widest mb-2">Evidence needed</p>
               <p className="font-mono text-sm leading-relaxed" style={{color:cur.color}}>{cur.detail}</p>
             </div>
 
@@ -155,12 +164,9 @@ export default function JEPADemo({ onClose }: { onClose: () => void }) {
 
             {/* Step validation result */}
             {step===6&&(
-              <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4 flex items-center gap-3">
-                <span className="text-3xl">✅</span>
-                <div>
-                  <p className="font-black text-emerald-300 text-sm">Placement PASSED</p>
-                  <p className="text-[11px] text-white/50">Component correctly placed within tolerance. Ready for next pick.</p>
-                </div>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p className="font-black text-white/80 text-sm">End of the planned sequence</p>
+                <p className="text-[11px] text-white/50">No part has been placed or validated on hardware yet.</p>
               </div>
             )}
           </div>

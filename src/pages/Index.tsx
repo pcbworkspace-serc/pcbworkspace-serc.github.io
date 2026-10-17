@@ -15,6 +15,7 @@ import Cristal from "@/components/Cristal";
 import { installSerialRecorder } from "@/lib/teach";
 import { installRobotStateListener } from "@/lib/robot_state";
 import { getMultiLabelDetection, getDetectBoxesByMethod, wakeBackend, type ClassPrediction, type DetectionBox, type DetectionMethod } from "@/lib/nn";
+import { getBoardId, isLabelableSource, type FrameSource } from "@/lib/labeling";
 import { grabCameraFrame } from "@/components/CameraFeed";
 import { captureScene } from "@/components/PCBWorkspace";
 import { detectCircuitBlocks, type CircuitBlock } from "@/lib/circuits";
@@ -166,16 +167,23 @@ const Index = () => {
     mlImageSize?: [number, number] | null;
     mlMethod?: DetectionMethod | null;
     mlMethodError?: string | null;
+    mlFrame?: Blob | null;
+    mlFrameSource?: FrameSource | null;
+    mlCaptureId?: string | null;
+    mlCaptureBoardId?: string | null;
   } | null>(null);
 
-  const lastDetectionRef = useRef<{ frame: Blob | null; source: string; imageUrl: string | null }>({
-    frame: null, source: "", imageUrl: null,
+  const lastDetectionRef = useRef<{ frame: Blob | null; source: string; imageUrl: string | null; frameSource: FrameSource | null }>({
+    frame: null, source: "", imageUrl: null, frameSource: null,
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const runDetectionWith = async (frame: Blob | null, source: string, imageUrl: string | null, method: DetectionMethod) => {
-    lastDetectionRef.current = { frame, source, imageUrl };
+  const runDetectionWith = async (
+    frame: Blob | null, source: string, imageUrl: string | null, method: DetectionMethod,
+    frameSource: FrameSource | null,
+  ) => {
+    lastDetectionRef.current = { frame, source, imageUrl, frameSource };
     setDetectOpen(true);
     setDetectLoading(true);
     setDetectResult(null);
@@ -197,11 +205,15 @@ const Index = () => {
     let mlImageSize: [number, number] | null = null;
     let mlMethod: DetectionMethod | null = null;
     let mlMethodError: string | null = null;
+    let mlCaptureId: string | null = null;
+    // the board id the backend records with this capture (see labeling.captureFields)
+    const mlCaptureBoardId = isLabelableSource(frameSource) ? getBoardId() || null : null;
     if (frame) {
       try {
-        const bx = await getDetectBoxesByMethod(frame, method);
+        const bx = await getDetectBoxesByMethod(frame, method, frameSource ?? undefined);
         mlBoxes = bx.boxes; mlImageSize = bx.image_size;
         mlMethod = (bx.method as DetectionMethod) ?? method;
+        mlCaptureId = bx.capture_id ?? null;
       } catch (e) {
         mlMethodError = e instanceof Error ? e.message : 'Box detection failed';
         mlMethod = method;
@@ -213,6 +225,7 @@ const Index = () => {
       mlPredictions, mlModel, mlInferenceMs,
       mlSource: source, mlImageUrl: imageUrl, mlBoxes, mlImageSize,
       mlMethod, mlMethodError,
+      mlFrame: frame, mlFrameSource: frameSource, mlCaptureId, mlCaptureBoardId,
     });
     setDetectLoading(false);
   };
@@ -220,23 +233,24 @@ const Index = () => {
   const runDetection = async () => {
     let frame: Blob | null = null;
     let source = 'no image';
-    try { frame = await grabCameraFrame(); if (frame) source = 'camera'; } catch {}
+    let frameSource: FrameSource | null = null;
+    try { frame = await grabCameraFrame(); if (frame) { source = 'camera'; frameSource = "camera"; } } catch {}
     if (!frame) {
-      try { frame = await captureScene(); if (frame) source = '3D scene'; } catch {}
+      try { frame = await captureScene(); if (frame) { source = '3D scene'; frameSource = "scene_render"; } } catch {}
     }
     const url = frame ? URL.createObjectURL(frame) : null;
-    await runDetectionWith(frame, source, url, detectMethod);
+    await runDetectionWith(frame, source, url, detectMethod, frameSource);
   };
 
-  const runDetectionOnFile = async (file: File) => {
+  const runDetectionOnFile = async (file: File, frameSource: FrameSource = "upload") => {
     const url = URL.createObjectURL(file);
-    await runDetectionWith(file, 'uploaded image', url, detectMethod);
+    await runDetectionWith(file, frameSource === "sample" ? 'sample image' : 'uploaded image', url, detectMethod, frameSource);
   };
 
   const rerunWithMethod = (method: DetectionMethod) => {
     setDetectMethod(method);
     const last = lastDetectionRef.current;
-    if (last.frame) runDetectionWith(last.frame, last.source, last.imageUrl, method);
+    if (last.frame) runDetectionWith(last.frame, last.source, last.imageUrl, method, last.frameSource);
     else runDetection();
   };
 
@@ -443,7 +457,7 @@ const Index = () => {
                 <div className="px-3 py-2 border-b border-white/10 text-[9px] font-black uppercase tracking-widest text-amber-300">ML Training Tools</div>
                 <div className="px-3 py-2">
                   <div className="text-[9px] text-white/50 mb-1">Try Sample Image</div>
-                  <SampleDropdown onPickSample={(f) => { setMlToolsOpen(false); runDetectionOnFile(f); }} />
+                  <SampleDropdown onPickSample={(f) => { setMlToolsOpen(false); runDetectionOnFile(f, "sample"); }} />
                 </div>
                 <button type="button" onClick={() => { setMlToolsOpen(false); fileInputRef.current?.click(); }} className="w-full px-3 py-2 border-t border-white/10 hover:bg-amber-500/10 text-left text-[10px] text-amber-300 font-semibold flex items-center justify-between transition-colors">
                   <span>Upload PCB Image</span>

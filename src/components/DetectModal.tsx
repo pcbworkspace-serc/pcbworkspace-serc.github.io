@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { decodeComponent, type ClassPrediction, type DetectionBox, type DetectionMethod } from "@/lib/nn";
+import type { FrameSource } from "@/lib/labeling";
+import LabelingPanel from "@/components/LabelingPanel";
 
 interface CircuitBlock {
   name: string;
@@ -31,6 +33,10 @@ interface DetectResult {
   mlImageSize?: [number, number] | null;
   mlMethod?: DetectionMethod | null;
   mlMethodError?: string | null;
+  mlFrame?: Blob | null;
+  mlFrameSource?: FrameSource | null;
+  mlCaptureId?: string | null;
+  mlCaptureBoardId?: string | null;
 }
 
 interface DetectModalProps {
@@ -148,10 +154,14 @@ export default function DetectModal({
     return () => window.removeEventListener("keydown", onEsc);
   }, [onClose]);
 
+  // while a person labels this frame, the model's answer stays out of sight
+  const [labeling, setLabeling] = useState(false);
+  useEffect(() => { setLabeling(false); }, [result]);
+
   if (!result && !loading) return null;
 
-  const hasBoxes = result?.mlBoxes && result.mlBoxes.length > 0;
-  const noBoxes = !loading && result && !hasBoxes && !result.mlMethodError && result.mlImageUrl;
+  const hasBoxes = !labeling && result?.mlBoxes && result.mlBoxes.length > 0;
+  const noBoxes = !loading && !labeling && result && !hasBoxes && !result.mlMethodError && result.mlImageUrl;
 
   return (
     <div
@@ -233,6 +243,17 @@ export default function DetectModal({
               </div>
             )}
 
+            <LabelingPanel
+              key={result.mlCaptureId ?? result.mlImageUrl ?? "frame"}
+              imageUrl={result.mlImageUrl ?? null}
+              frame={result.mlFrame ?? null}
+              imageSize={result.mlImageSize ?? null}
+              captureId={result.mlCaptureId ?? null}
+              capturedBoardId={result.mlCaptureBoardId ?? null}
+              frameSource={result.mlFrameSource ?? null}
+              onLabelingChange={setLabeling}
+            />
+
             {/* Empty state â€” no boxes found */}
             {noBoxes && (
               <div className="mb-5 px-3 py-3 rounded-md bg-blue-500/10 border border-blue-500/30 text-[12px] text-blue-300">
@@ -274,7 +295,7 @@ export default function DetectModal({
               </div>
             )}
 
-            {result.mlPredictions && result.mlPredictions.length > 0 && !hasBoxes && (
+            {!labeling && result.mlPredictions && result.mlPredictions.length > 0 && !hasBoxes && (
               <div className="mb-5">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                   Vision: Component Likelihoods

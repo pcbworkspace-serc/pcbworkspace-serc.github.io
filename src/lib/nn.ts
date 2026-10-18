@@ -1,3 +1,4 @@
+import { captureFields, type FrameSource } from "@/lib/labeling";
 
 const BASE = (import.meta.env.VITE_NN_URL as string | undefined) || "http://localhost:5000";
 
@@ -11,11 +12,20 @@ export interface NNStatus {
   parameters?: number;
   num_classes?: number;
   class_names?: string[];
-  metrics_from_paper?: {
-    mAP: number;
-    "macro_f1_at_0.5": number;
-    "macro_precision_at_0.5": number;
-    "macro_recall_at_0.5": number;
+  /** No detection accuracy has been measured on SERC boards yet
+   *  (serc_boards.measured is false). The only figures are the FPIC paper's,
+   *  on the public FPIC dataset; never show them as SERC performance. */
+  detection_metrics?: {
+    serc_boards: { measured: boolean; status: string; how_to_measure?: string };
+    fpic_paper_reference: {
+      source: string;
+      dataset: string;
+      measured_by_serc: false;
+      mAP: number;
+      "macro_f1_at_0.5": number;
+      "macro_precision_at_0.5": number;
+      "macro_recall_at_0.5": number;
+    };
   };
   methods?: {
     sliding_window?: { endpoint: string; available: boolean; description: string };
@@ -48,12 +58,18 @@ export interface MultiLabelResult {
 
 export interface AlignmentResult {
   delta_theta_deg: number;
-  delta_x_mm: number;
-  delta_y_mm: number;
+  /** null when the backend has no calibration to convert pixels to mm */
+  delta_x_mm: number | null;
+  delta_y_mm: number | null;
+  delta_x_px?: number;
+  delta_y_px?: number;
+  method?: string;
   confidence?: number;
   inference_ms?: number;
   available?: boolean;
   reason?: string;
+  /** present when the backend saved this frame for labeling */
+  capture_id?: string;
 }
 
 export interface ValidationResult {
@@ -107,11 +123,18 @@ async function resizeBlobImage(blob: Blob, maxSide: number = UPLOAD_MAX_SIDE): P
   }
 }
 
-async function postWithFrame(endpoint: string, frame: Blob | null): Promise<Response> {
+/** source tags the frame for the backend's capture loop (see labeling.ts).
+ *  resize: false keeps pixels 1:1 with what a labeler clicks on. */
+async function postWithFrame(
+  endpoint: string, frame: Blob | null, source?: FrameSource, resize = true,
+): Promise<Response> {
   if (frame) {
-    const resized = await resizeBlobImage(frame);
+    const body = resize ? await resizeBlobImage(frame) : frame;
     const form = new FormData();
-    form.append("image", resized, "frame.jpg");
+    form.append("image", body, resize ? "frame.jpg" : "frame.png");
+    if (source) {
+      for (const [k, v] of Object.entries(captureFields(source))) form.append(k, v);
+    }
     return fetch(BASE + endpoint, { method: "POST", body: form });
   }
   return fetch(BASE + endpoint, {
@@ -166,26 +189,24 @@ export const getDetection = async (frame?: Blob | null): Promise<DetectionResult
   };
 };
 
-export const getAlignmentCorrection = async (frame?: Blob | null): Promise<AlignmentResult> => {
+/** Never invents a correction: when the backend can't answer, the result
+ *  is available: false with the reason, and callers must show that. */
+export const getAlignmentCorrection = async (
+  frame?: Blob | null, source?: FrameSource, resize = true,
+): Promise<AlignmentResult> => {
+  const unavailable = (reason: string): AlignmentResult => ({
+    delta_theta_deg: 0, delta_x_mm: null, delta_y_mm: null, available: false, reason,
+  });
+  let res: Response;
   try {
-    const res = await postWithFrame("/nn/align", frame ?? null);
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    if (data.available === false) {
-      return {
-        delta_theta_deg: 0, delta_x_mm: 0, delta_y_mm: 0,
-        available: false, reason: data.reason,
-      };
-    }
-    return data;
+    res = await postWithFrame("/nn/align", frame ?? null, source, resize);
   } catch {
-    await new Promise((r) => setTimeout(r, 1200));
-    return {
-      delta_theta_deg: (Math.random() * 10) - 5,
-      delta_x_mm: (Math.random() * 0.8) - 0.4,
-      delta_y_mm: (Math.random() * 0.8) - 0.4,
-    };
+    return unavailable("alignment backend unreachable");
   }
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data) return unavailable(data?.reason ?? data?.error ?? `alignment failed (HTTP ${res.status})`);
+  if (data.available === false) return { ...unavailable(data.reason ?? "no alignment available"), capture_id: data.capture_id };
+  return data;
 };
 
 export const getValidation = async (frame?: Blob | null): Promise<ValidationResult> => {
@@ -240,16 +261,18 @@ export interface DetectBoxesResult {
   method?: DetectionMethod;
   model: string;
   inference_ms: number;
+  /** present when the backend saved this frame for labeling */
+  capture_id?: string;
 }
 
-export const getDetectBoxes = async (frame: Blob | null): Promise<DetectBoxesResult> => {
-  const res = await postWithFrame('/nn/detect_boxes', frame);
+export const getDetectBoxes = async (frame: Blob | null, source?: FrameSource): Promise<DetectBoxesResult> => {
+  const res = await postWithFrame('/nn/detect_boxes', frame, source);
   if (!res.ok) throw new Error('detect_boxes failed: ' + res.status);
   return res.json();
 };
 
-export const getDetectBoxesYolo = async (frame: Blob | null): Promise<DetectBoxesResult> => {
-  const res = await postWithFrame('/nn/detect_boxes_yolo', frame);
+export const getDetectBoxesYolo = async (frame: Blob | null, source?: FrameSource): Promise<DetectBoxesResult> => {
+  const res = await postWithFrame('/nn/detect_boxes_yolo', frame, source);
   if (!res.ok) throw new Error('detect_boxes_yolo failed: ' + res.status);
   return res.json();
 };
@@ -257,6 +280,24 @@ export const getDetectBoxesYolo = async (frame: Blob | null): Promise<DetectBoxe
 export const getDetectBoxesByMethod = (
   frame: Blob | null,
   method: DetectionMethod,
+  source?: FrameSource,
 ): Promise<DetectBoxesResult> => {
-  return method === "yolo_hybrid" ? getDetectBoxesYolo(frame) : getDetectBoxes(frame);
+  return method === "yolo_hybrid" ? getDetectBoxesYolo(frame, source) : getDetectBoxes(frame, source);
+};
+
+/** Sends a person's label for a captured frame to /nn/feedback. The payload
+ *  comes from labeling.buildFeedbackPayload (label_source "human"). */
+export const submitHumanLabel = async (payload: object): Promise<{ ok: boolean; error?: string }> => {
+  try {
+    const res = await fetch(BASE + "/nn/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => null);
+    if (res.ok && data?.ok) return { ok: true };
+    return { ok: false, error: data?.error ?? `feedback failed (HTTP ${res.status})` };
+  } catch {
+    return { ok: false, error: "backend unreachable" };
+  }
 };

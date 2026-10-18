@@ -34,10 +34,18 @@ const LaylaChat = () => {
       // CNN commands
       if (lower.includes("detect")) {
         const r = await getDetection();
-        pushMsg("bot", `🔍 Detection result: ${r.class_name} (${(r.confidence * 100).toFixed(1)}% confidence)\nBBox: cx=${r.bbox[0].toFixed(3)} cy=${r.bbox[1].toFixed(3)} w=${r.bbox[2].toFixed(3)} h=${r.bbox[3].toFixed(3)} — ${r.inference_ms}ms`);
+        // /nn/detect classifies the whole frame; it returns no box, so none is shown
+        pushMsg("bot", `🔍 Detection result: ${r.class_name} (${(r.confidence * 100).toFixed(1)}% confidence) — ${r.inference_ms}ms`);
       } else if (lower.includes("align")) {
         const r = await getAlignmentCorrection();
-        pushMsg("bot", `📐 Alignment correction:\nΔθ = ${r.delta_theta_deg.toFixed(2)}°\nΔx = ${r.delta_x_mm.toFixed(3)} mm\nΔy = ${r.delta_y_mm.toFixed(3)} mm`);
+        if (r.available === false) {
+          pushMsg("bot", `📐 Alignment unavailable: ${r.reason ?? "no result"}. No correction was computed.`);
+        } else {
+          const offset = r.delta_x_mm != null && r.delta_y_mm != null
+            ? `Δx = ${r.delta_x_mm.toFixed(3)} mm\nΔy = ${r.delta_y_mm.toFixed(3)} mm`
+            : `Δx = ${r.delta_x_px?.toFixed(1)} px\nΔy = ${r.delta_y_px?.toFixed(1)} px (no calibration, so no mm)`;
+          pushMsg("bot", `📐 Alignment correction:\nΔθ = ${r.delta_theta_deg.toFixed(2)}°\n${offset}`);
+        }
       } else if (lower.includes("validate")) {
         const r = await getValidation();
         const icon = r.decision === "PASS" ? "✅" : "❌";

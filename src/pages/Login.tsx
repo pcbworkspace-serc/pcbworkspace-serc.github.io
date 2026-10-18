@@ -16,7 +16,8 @@ export default function Login() {
     setIsSubmitting(true);
 
     const result = await authenticate(email, password);
-    if (!result.ok) {
+    // compare explicitly: without strictNullChecks, `!result.ok` doesn't narrow the union
+    if (result.ok === false) {
       setError(result.error);
       setIsSubmitting(false);
       return;

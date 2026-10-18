@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { decodeComponent, type ClassPrediction, type DetectionBox, type DetectionMethod } from "@/lib/nn";
+import type { FrameSource } from "@/lib/labeling";
+import LabelingPanel from "@/components/LabelingPanel";
 
 interface CircuitBlock {
   name: string;
@@ -31,6 +33,10 @@ interface DetectResult {
   mlImageSize?: [number, number] | null;
   mlMethod?: DetectionMethod | null;
   mlMethodError?: string | null;
+  mlFrame?: Blob | null;
+  mlFrameSource?: FrameSource | null;
+  mlCaptureId?: string | null;
+  mlCaptureBoardId?: string | null;
 }
 
 interface DetectModalProps {
@@ -148,10 +154,14 @@ export default function DetectModal({
     return () => window.removeEventListener("keydown", onEsc);
   }, [onClose]);
 
+  // while a person labels this frame, the model's answer stays out of sight
+  const [labeling, setLabeling] = useState(false);
+  useEffect(() => { setLabeling(false); }, [result]);
+
   if (!result && !loading) return null;
 
-  const hasBoxes = result?.mlBoxes && result.mlBoxes.length > 0;
-  const noBoxes = !loading && result && !hasBoxes && !result.mlMethodError && result.mlImageUrl;
+  const hasBoxes = !labeling && result?.mlBoxes && result.mlBoxes.length > 0;
+  const noBoxes = !loading && !labeling && result && !hasBoxes && !result.mlMethodError && result.mlImageUrl;
 
   return (
     <div
@@ -173,7 +183,7 @@ export default function DetectModal({
 
         <h2 className="text-2xl font-bold text-primary mb-1">PCB Detection</h2>
 
-        {/* Method picker â€” moved here from the toolbar */}
+        {/* Method picker — moved here from the toolbar */}
         <div className="flex items-center gap-2 mb-4">
           <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Method:</span>
           <div className="flex items-stretch rounded-md border border-primary/30 overflow-hidden text-[10px] font-bold uppercase tracking-wider">
@@ -200,7 +210,7 @@ export default function DetectModal({
         </div>
 
         <p className="text-xs text-muted-foreground mb-5">
-          {result?.mlModel ?? "Layla Vision Â· CNN backend"}
+          {result?.mlModel ?? "Layla Vision · CNN backend"}
         </p>
 
         {loading && <ElapsedTimer />}
@@ -233,13 +243,24 @@ export default function DetectModal({
               </div>
             )}
 
-            {/* Empty state â€” no boxes found */}
+            <LabelingPanel
+              key={result.mlCaptureId ?? result.mlImageUrl ?? "frame"}
+              imageUrl={result.mlImageUrl ?? null}
+              frame={result.mlFrame ?? null}
+              imageSize={result.mlImageSize ?? null}
+              captureId={result.mlCaptureId ?? null}
+              capturedBoardId={result.mlCaptureBoardId ?? null}
+              frameSource={result.mlFrameSource ?? null}
+              onLabelingChange={setLabeling}
+            />
+
+            {/* Empty state — no boxes found */}
             {noBoxes && (
               <div className="mb-5 px-3 py-3 rounded-md bg-blue-500/10 border border-blue-500/30 text-[12px] text-blue-300">
                 <p className="font-bold mb-1">No components detected.</p>
                 <p className="text-blue-300/70">
                   Try the other detection method, or upload a clearer image of a PCB.
-                  This model was trained on the FPIC dataset â€” close-ups of green PCBs with surface-mount parts work best.
+                  This model was trained on the FPIC dataset — close-ups of green PCBs with surface-mount parts work best.
                 </p>
               </div>
             )}
@@ -260,9 +281,9 @@ export default function DetectModal({
                       <div className="w-3 h-3 rounded" style={{ backgroundColor: colorForClass(b.class) }} />
                       <span className="font-bold text-foreground">{b.class}</span>
                       <span className="text-muted-foreground">{b.class_full}</span>
-                      {(b as any).yolo_score !== undefined && (
+                      {b.yolo_score !== undefined && (
                         <span className="text-[9px] text-muted-foreground/70 font-mono ml-1">
-                          yolo {((b as any).yolo_score * 100).toFixed(0)}% Â· cls {((b as any).classifier_score * 100).toFixed(0)}%
+                          yolo {(b.yolo_score * 100).toFixed(0)}% · cls {((b.classifier_score ?? 0) * 100).toFixed(0)}%
                         </span>
                       )}
                       <span className="ml-auto font-mono" style={{ color: scoreColor(b.score) }}>
@@ -274,7 +295,7 @@ export default function DetectModal({
               </div>
             )}
 
-            {result.mlPredictions && result.mlPredictions.length > 0 && !hasBoxes && (
+            {!labeling && result.mlPredictions && result.mlPredictions.length > 0 && !hasBoxes && (
               <div className="mb-5">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                   Vision: Component Likelihoods

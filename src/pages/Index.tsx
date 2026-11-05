@@ -2,6 +2,7 @@ import PCBWorkspace from "@/components/PCBWorkspace";
 import Inventory from "@/components/Inventory";
 import CameraFeed from "@/components/CameraFeed";
 import RobotPanel from "@/components/RobotPanel";
+import ModuleExchangePanel from "@/components/ModuleExchangePanel";
 import SampleDropdown from "@/components/SampleDropdown";
 import CalibrateButton from "@/components/CalibrateButton";
 import JEPADemo from "@/components/JEPADemo";
@@ -382,6 +383,7 @@ const Index = () => {
             <span className="text-[8px] bg-black text-[#00a3ff] px-1.5 py-0.5 rounded font-black">OPEN</span>
           </button>
           <Inventory />
+          <ModuleExchangePanel />
         </div>
       </div>
 

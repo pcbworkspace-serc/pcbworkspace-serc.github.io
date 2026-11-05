@@ -13,6 +13,7 @@ might hit the arm simultaneously.
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 from dataclasses import dataclass, field
@@ -27,8 +28,7 @@ import kinematics
 
 # ── Serial transport ────────────────────────────────────────────────────────
 class _SerialStub:
-    """Stand-in for a real serial port when pyserial isn't installed or no
-    hardware is attached. Lets the rest of the stack run for development."""
+    """Explicit simulation transport for development without hardware."""
     def __init__(self):
         self._buf: List[str] = []
         # Pretend the firmware just booted.
@@ -44,7 +44,7 @@ class _SerialStub:
         # Echo a synthetic ack and a synthetic "done" for moves.
         self._buf.append(json.dumps({"ack": cid, "ok": True}) + "\n")
         if cmd in ("move", "home"):
-            self._buf.append(json.dumps({"event": "done"}) + "\n")
+            self._buf.append(json.dumps({"event": "homed" if cmd == "home" else "done"}) + "\n")
         elif cmd == "status":
             self._buf.append(json.dumps({
                 "status": {"estop": False, "moving": False,
@@ -63,12 +63,31 @@ class _SerialStub:
 
 
 def _open_serial(port: str, baud: int):
-    try:
-        import serial
-        return serial.Serial(port, baud, timeout=config.SERIAL_TIMEOUT)
-    except Exception as e:
-        print(f"[robot] serial open failed ({e}); using stub")
+    if os.environ.get("SERC_SIMULATION") == "1":
         return _SerialStub()
+    import serial
+    return serial.Serial(port, baud, timeout=config.SERIAL_TIMEOUT)
+
+
+def _verify_serial_protocol(ser) -> None:
+    """Require a status reply from the JSON firmware before marking it online."""
+    deadline = time.monotonic() + config.SERIAL_HANDSHAKE_TIMEOUT
+    next_probe = 0.0
+    while time.monotonic() < deadline:
+        now = time.monotonic()
+        if now >= next_probe:
+            ser.write(b'{"cmd":"status","id":0}\n')
+            next_probe = now + 0.5
+        line = ser.readline()
+        if not line:
+            continue
+        try:
+            msg = json.loads(line.decode().strip())
+        except (UnicodeError, ValueError):
+            continue
+        if isinstance(msg, dict) and isinstance(msg.get("status"), dict):
+            return
+    raise ConnectionError("ESP32 did not answer the JSON status handshake")
 
 
 # ── Robot driver ────────────────────────────────────────────────────────────
@@ -88,10 +107,17 @@ class Robot:
         self.port = port or config.SERIAL_PORT
         self.baud = baud
         self._ser = _open_serial(self.port, self.baud)
+        try:
+            _verify_serial_protocol(self._ser)
+        except Exception:
+            self._ser.close()
+            raise
         self.state = RobotState(connected=True)
         self._cmd_id = 0
         self._lock = threading.Lock()
         self._pending_done: Optional[threading.Event] = None
+        self._pending_event: Optional[str] = None
+        self._pending_error: Optional[str] = None
         self._listeners: List[Callable[[dict], None]] = []
         # Start a background thread that pulls lines off the serial port and
         # routes them to event handlers / the pending-done event.
@@ -102,19 +128,29 @@ class Robot:
     # ---- low-level send/recv ----
     def _send(self, msg: dict) -> int:
         with self._lock:
+            if not self.state.connected:
+                raise ConnectionError("robot serial port is disconnected")
             self._cmd_id += 1
             msg["id"] = self._cmd_id
             line = (json.dumps(msg) + "\n").encode()
-            self._ser.write(line)
+            try:
+                self._ser.write(line)
+            except Exception:
+                self.state.connected = False
+                raise
             return self._cmd_id
 
     def _read_loop(self):
         while not self._stop.is_set():
             try:
                 line = self._ser.readline()
-            except Exception:
-                time.sleep(0.05)
-                continue
+            except Exception as e:
+                self.state.connected = False
+                self.state.moving = False
+                self._pending_error = f"serial disconnected: {e}"
+                if self._pending_done:
+                    self._pending_done.set()
+                break
             if not line:
                 time.sleep(0.005)
                 continue
@@ -126,17 +162,25 @@ class Robot:
 
     def _handle(self, msg: dict):
         ev = msg.get("event")
-        if ev == "done":
+        if ev in ("done", "homed"):
             self.state.moving = False
-            self.state.last_event = "done"
-            if self._pending_done:
+            self.state.last_event = ev
+            if self._pending_done and ev == self._pending_event:
                 self._pending_done.set()
         elif ev == "stall":
             self.state.estopped = True
+            self.state.moving = False
             self.state.last_event = f"stall:{msg.get('axis')}"
+            self._pending_error = self.state.last_event
+            if self._pending_done:
+                self._pending_done.set()
         elif ev == "estop":
             self.state.estopped = True
+            self.state.moving = False
             self.state.last_event = f"estop:{msg.get('reason')}"
+            self._pending_error = self.state.last_event
+            if self._pending_done:
+                self._pending_done.set()
         elif ev == "ready":
             self.state.last_event = "ready"
         elif "status" in msg:
@@ -147,6 +191,10 @@ class Robot:
             self.state.encoders_deg = s.get("encoders", {})
         elif "error" in msg:
             self.state.last_error = msg["error"]
+            self.state.moving = False
+            self._pending_error = self.state.last_error
+            if self._pending_done:
+                self._pending_done.set()
         for fn in self._listeners:
             try: fn(msg)
             except Exception: pass
@@ -157,12 +205,19 @@ class Robot:
     # ---- high-level commands ----
     def home(self, wait: bool = True, timeout: float = 30.0) -> None:
         self._pending_done = threading.Event()
-        self._send({"cmd": "home"})
-        self.state.moving = True
-        if wait:
-            if not self._pending_done.wait(timeout):
-                raise TimeoutError("home timed out")
-        self._pending_done = None
+        self._pending_event = "homed"
+        self._pending_error = None
+        try:
+            self.state.moving = True
+            self._send({"cmd": "home"})
+            if wait:
+                if not self._pending_done.wait(timeout):
+                    raise TimeoutError("home timed out")
+                if self._pending_error:
+                    raise RuntimeError(self._pending_error)
+        finally:
+            self._pending_done = None
+            self._pending_event = None
 
     def move_joints(self, theta_b: float, theta_s: float, theta_e: float,
                     theta_w: float = 0.0, wait: bool = True,
@@ -170,13 +225,20 @@ class Robot:
         if self.state.estopped:
             raise RuntimeError("robot is estopped; call reset() first")
         self._pending_done = threading.Event()
-        self._send({"cmd": "move", "j": [theta_b, theta_s, theta_e, theta_w]})
-        self.state.moving = True
-        if wait:
-            if not self._pending_done.wait(timeout):
-                raise TimeoutError("move timed out")
-            time.sleep(config.PICK_PLACE_SETTLE_MS / 1000.0)
-        self._pending_done = None
+        self._pending_event = "done"
+        self._pending_error = None
+        try:
+            self.state.moving = True
+            self._send({"cmd": "move", "j": [theta_b, theta_s, theta_e, theta_w]})
+            if wait:
+                if not self._pending_done.wait(timeout):
+                    raise TimeoutError("move timed out")
+                if self._pending_error:
+                    raise RuntimeError(self._pending_error)
+                time.sleep(config.PICK_PLACE_SETTLE_MS / 1000.0)
+        finally:
+            self._pending_done = None
+            self._pending_event = None
 
     def move_to(self, x: float, y: float, z: float, wrist_deg: float = 0.0,
                 wait: bool = True) -> Tuple[float, float, float, float]:
@@ -224,6 +286,7 @@ class Robot:
 
     def shutdown(self):
         self._stop.set()
+        self.state.connected = False
         try: self._ser.close()
         except Exception: pass
 

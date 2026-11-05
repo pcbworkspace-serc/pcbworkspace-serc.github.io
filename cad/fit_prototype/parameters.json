@@ -1,0 +1,13 @@
+{
+  "link1": 150,
+  "link2": 180,
+  "pivot_diameter": 5.4,
+  "nema17_face": 42,
+  "nema17_pattern": 31,
+  "nema17_pilot": 22,
+  "nema17_hole": 3.4,
+  "nema14_face": 35,
+  "nema14_pattern": 26,
+  "nema14_pilot": 22,
+  "nema14_hole": 3.4
+}
